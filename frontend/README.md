@@ -28,18 +28,37 @@ A comprehensive Learning Management System (LMS) designed for educators to manag
 ## 📁 Project Structure
 
 ```
-src/
-├── components/
-│   ├── ui/                 # Reusable UI components
-│   ├── inputs/             # Form input components
-│   ├── layouts/            # Layout components
-│   ├── App.tsx            # Main application component
-│   ├── ClosedTaskReview.tsx
-│   ├── OngoingTasks.tsx
-│   ├── SubmissionDetailsModal.tsx
+V1/
+├── backend/
+│   ├── src/
+│   │   ├── database/       # Database connection and setup files
+│   │   ├── middlewares/    # Express middlewares for auth, logging, and error handling
+│   │   ├── routes/         # API routes (e.g., Auth0 integration, main app routes)
+│   │   └── app.js          # Express app entry point
+│   ├── .env                # Environment variables (e.g., DB credentials, Auth0 config)
+│   ├── debug-app.js        # Debugging or local test entry script
+│   ├── test-connect.js     # Script to test database connectivity
+│   ├── package.json        # Backend dependencies and scripts
 │   └── ...
-├── services/              # Business logic services
-└── lib/                   # Utility functions
+│
+├── frontend/
+│   ├── public/             # Static assets (icons, images, etc.)
+│   ├── src/
+│   │   ├── app/            # Next.js app router (pages, layout, global styles)
+│   │   ├── features/       # Modularized features grouped by functionality
+│   │   │   ├── auth/       # Authentication logic, mock components, and hooks
+│   │   │   ├── dashboard-selection/     # Dashboard view and selector components
+│   │   │   ├── educator-experience/     # Teacher-facing views and tools
+│   │   │   ├── navigation/              # Shared navigation components
+│   │   │   └── student-experience/      # Student-facing pages and UI logic
+│   │   ├── lib/            # Common utilities and helper functions
+│   │   ├── mocks/data/     # Mock data for development and testing
+│   │   ├── services/       # Frontend service functions (e.g., API calls, data fetchers)
+│   │   └── ...
+│   ├── package.json        # Frontend dependencies and scripts
+│   └── ...
+│
+└── .gitignore              # Ignored files and folders for version control
 ```
 
 ## 🚦 Getting Started
