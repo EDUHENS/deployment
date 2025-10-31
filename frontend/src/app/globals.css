@@ -1,0 +1,628 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'helvetica-neue', sans-serif;
+  /* Ensure consistent font rendering across browsers */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-synthesis: none;
+  font-variant-ligatures: none;
+}
+
+/* Ensure all elements use Helvetica Neue */
+* {
+  font-family: 'helvetica-neue', sans-serif !important;
+  /* Consistent font rendering across browsers */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Ensure backdrop-blur works properly */
+.backdrop-blur-sm {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* Smooth spinning loader animation */
+@keyframes spin-loader {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Container that spins the dots around center with smooth easing */
+.spin-container {
+  animation: spin-loader 3s ease-in-out infinite;
+}
+
+/* Pulsing distance animation for dots */
+@keyframes pulse-distance {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.3);
+  }
+}
+
+/* Apply pulsing to individual dots */
+.pulse-dot {
+  animation: pulse-distance 1.5s ease-in-out infinite;
+}
+
+/* Subtle floating animation for brand visuals */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Modern hover animations with best practices */
+.dashboard-card {
+  position: relative;
+  overflow: hidden;
+  will-change: transform, background-color;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+/* Removed overlay effect */
+
+.dashboard-text {
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  color: #FFF !important;
+  opacity: 1 !important;
+}
+
+.dashboard-card:hover .dashboard-text {
+  transform: translateY(-20px);
+}
+
+.dashboard-card {
+  transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Removed shadow effect */
+
+/* Educator specific colors */
+.educator-card {
+  background-color: #3A3FE4;
+}
+
+.educator-card:hover {
+  background-color: #3638D1; /* Slightly darker on hover */
+}
+
+/* Student specific colors */
+.student-card {
+  background-color: #F04A0F;
+}
+
+.student-card:hover {
+  background-color: #E8450D; /* Slightly darker on hover */
+}
+
+/* Cool AInputBox Animations */
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes sparkleRotate {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  25% {
+    transform: rotate(90deg) scale(1.1);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.2);
+  }
+  75% {
+    transform: rotate(270deg) scale(1.1);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+@keyframes sparkleGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 5px rgba(241, 90, 36, 0.3));
+  }
+  50% {
+    filter: drop-shadow(0 0 15px rgba(241, 90, 36, 0.6));
+  }
+}
+
+@keyframes sendBounce {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.05);
+  }
+}
+
+.animate-gradient-border {
+  animation: gradientShift 3s ease-in-out infinite;
+}
+
+.animate-sparkle-rotate {
+  animation: sparkleRotate 2s ease-in-out infinite, sparkleGlow 1.5s ease-in-out infinite;
+}
+
+.animate-send-bounce {
+  animation: sendBounce 0.6s ease-in-out infinite;
+}
+
+@keyframes floatGentle {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-1px);
+  }
+}
+
+@keyframes rotate360 {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-float-gentle {
+  animation: floatGentle 3s ease-in-out infinite;
+}
+
+.animate-rotate-360 {
+  animation: rotate360 0.3s ease-in-out;
+}
+
+/* Status circle for task indicators */
+.status-circle {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* React DatePicker Custom Styles */
+.react-datepicker {
+  font-family: 'helvetica-neue', sans-serif !important;
+  border: 2px solid #cccccc !important;
+  border-radius: 12px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+.react-datepicker-popper {
+  z-index: 999 !important;
+}
+
+.react-datepicker-wrapper {
+  width: 100% !important;
+}
+
+.react-datepicker__input-container {
+  width: 100% !important;
+}
+
+.react-datepicker__input-container input {
+  width: 100% !important;
+}
+
+.react-datepicker__header {
+  background-color: #f8f8f8 !important;
+  border-bottom: 1px solid #e6e6e6 !important;
+  border-radius: 12px 12px 0 0 !important;
+  padding-top: 16px !important;
+}
+
+.react-datepicker__current-month {
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  color: #222222 !important;
+  margin-bottom: 12px !important;
+}
+
+.react-datepicker__day-name {
+  color: #595959 !important;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  width: 40px !important;
+  line-height: 40px !important;
+  margin: 2px !important;
+}
+
+.react-datepicker__day {
+  width: 40px !important;
+  line-height: 40px !important;
+  margin: 2px !important;
+  border-radius: 8px !important;
+  color: #222222 !important;
+  font-size: 16px !important;
+  transition: all 0.2s ease !important;
+}
+
+.react-datepicker__day:hover {
+  background-color: #e6e6ff !important;
+  color: #222222 !important;
+}
+
+.react-datepicker__day--selected {
+  background-color: #484de6 !important;
+  color: white !important;
+  font-weight: 600 !important;
+}
+
+.react-datepicker__day--keyboard-selected {
+  background-color: #6976eb !important;
+  color: white !important;
+}
+
+.react-datepicker__day--outside-month {
+  color: #cccccc !important;
+}
+
+.react-datepicker__day--disabled {
+  color: #cccccc !important;
+  cursor: not-allowed !important;
+}
+
+.react-datepicker__navigation {
+  top: 18px !important;
+}
+
+.react-datepicker__navigation-icon::before {
+  border-color: #484de6 !important;
+  border-width: 2px 2px 0 0 !important;
+}
+
+.react-datepicker__time-container {
+  border-left: 1px solid #e6e6e6 !important;
+  width: 85px !important;
+}
+
+.react-datepicker__time-list-item {
+  transition: all 0.2s ease !important;
+  font-size: 16px !important;
+}
+
+.react-datepicker__time-list-item:hover {
+  background-color: #e6e6ff !important;
+}
+
+.react-datepicker__time-list-item--selected {
+  background-color: #484de6 !important;
+  color: white !important;
+  font-weight: 600 !important;
+}
+
+.react-datepicker__time-box {
+  border-radius: 0 0 12px 0 !important;
+  width: 100% !important;
+}
+
+.react-datepicker__time-list {
+  padding: 0 !important;
+  height: 195px !important;
+  overflow-y: auto !important;
+}
+
+/* Shadcn UI Overrides */
+.rdp {
+  --rdp-cell-size: 40px;
+  --rdp-accent-color: #484de6;
+  --rdp-background-color: #e6e6ff;
+  margin: 0;
+}
+
+.rdp-months {
+  display: flex;
+}
+
+.rdp-month {
+  margin: 0;
+  padding: 16px;
+}
+
+.rdp-caption {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.rdp-caption_label {
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  color: #222222 !important;
+  letter-spacing: 0.02em !important;
+}
+
+.rdp-nav {
+  position: absolute;
+  top: 16px;
+  display: flex;
+  align-items: center;
+}
+
+.rdp-nav_button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 36px !important;
+  height: 36px !important;
+  padding: 0 !important;
+  border-radius: 8px !important;
+  border: 2px solid #222222 !important;
+  background: white !important;
+  color: #222222 !important;
+  cursor: pointer !important;
+  opacity: 1 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+.rdp-nav_button:hover {
+  background-color: #484de6 !important;
+  border-color: #484de6 !important;
+  color: white !important;
+}
+
+.rdp-nav_button:hover svg {
+  color: white !important;
+}
+
+.rdp-nav_button svg {
+  width: 20px !important;
+  height: 20px !important;
+  color: #222222 !important;
+  opacity: 1 !important;
+  stroke-width: 3 !important;
+}
+
+.rdp-nav_button_previous {
+  left: 16px;
+}
+
+.rdp-nav_button_next {
+  right: 16px;
+}
+
+.rdp-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rdp-head_cell {
+  color: #222222 !important;
+  font-size: 16px;
+  font-weight: 600 !important;
+  text-align: center;
+  padding: 4px;
+  opacity: 1 !important;
+}
+
+.rdp-cell {
+  text-align: center;
+  padding: 2px;
+}
+
+.rdp-day {
+  width: 40px !important;
+  height: 40px !important;
+  padding: 0 !important;
+  font-size: 18px !important;
+  font-weight: 500 !important;
+  color: #222222 !important;
+  border-radius: 8px !important;
+  border: 1px solid transparent !important;
+  background: white !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+
+.rdp-day:hover:not(.rdp-day_selected):not(.rdp-day_disabled) {
+  background-color: #e6e6ff !important;
+  border-color: #484de6 !important;
+}
+
+.rdp-day_selected {
+  background-color: #484de6 !important;
+  color: white !important;
+  font-weight: 700 !important;
+  border-color: #484de6 !important;
+}
+
+.rdp-day_today:not(.rdp-day_selected) {
+  font-weight: 700 !important;
+  color: #484de6 !important;
+  border-color: #484de6 !important;
+}
+
+.rdp-day_outside {
+  color: #999999 !important;
+  background: #f8f8f8 !important;
+}
+
+.rdp-day_disabled {
+  color: #cccccc !important;
+  background: #f8f8f8 !important;
+  cursor: not-allowed !important;
+}
+
+/* Popover z-index fix */
+[data-radix-popper-content-wrapper] {
+  z-index: 9999 !important;
+}
+
+/* Select dropdown styling */
+[data-radix-select-content] {
+  z-index: 9999 !important;
+  max-height: 300px;
+  overflow-y: auto;
+  background: white;
+  border: 2px solid #595959 !important;
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+[data-radix-select-viewport] {
+  padding: 0;
+}
+
+[data-radix-select-item] {
+  padding: 8px 12px;
+  font-size: 16px;
+  color: #222222 !important;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+[data-radix-select-item]:hover {
+  background-color: #e6e6ff;
+  outline: none;
+}
+
+[data-radix-select-item][data-highlighted] {
+  background-color: #e6e6ff;
+  outline: none;
+}
+
+[data-radix-select-item][data-state="checked"] {
+  background-color: #484de6;
+  color: white !important;
+  font-weight: 600;
+}
+
+/* Select Trigger - Make borders and icons visible */
+[data-radix-select-trigger] {
+  border: 2px solid #595959 !important;
+  color: #222222 !important;
+}
+
+[data-radix-select-trigger]:hover {
+  border-color: #484de6 !important;
+  background-color: #f8f8f8 !important;
+}
+
+[data-radix-select-trigger] svg {
+  color: #595959 !important;
+  opacity: 1 !important;
+}
+
+/* Make Select icon more visible */
+[data-radix-select-icon] {
+  color: #595959 !important;
+  opacity: 1 !important;
+}
+
+/* Custom scrollbar styles for better UX */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #9ca3af #f3f4f6;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 8px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+.scrollbar-thumb-gray-400::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+}
+
+.scrollbar-track-gray-100::-webkit-scrollbar-track {
+  background: #f3f4f6;
+}
+
+.hover\:scrollbar-thumb-gray-500:hover::-webkit-scrollbar-thumb {
+  background: #6b7280;
+}
+
+/* Cross-browser font consistency fixes */
+html {
+  /* Set base font size for consistent scaling */
+  font-size: 16px;
+  
+  /* Prevent font size adjustments in mobile browsers */
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  
+  /* Ensure consistent font rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Force consistent font rendering for all text elements */
+p, span, div, h1, h2, h3, h4, h5, h6, button, input, textarea, select, label {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Ensure consistent font metrics */
+.font-helvetica {
+  font-family: 'helvetica-neue', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: normal;
+  font-style: normal;
+  font-stretch: normal;
+  letter-spacing: normal;
+  line-height: normal;
+}
