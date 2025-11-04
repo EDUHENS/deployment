@@ -10,12 +10,13 @@ export default function DashboardSelectionPage() {
   const { user, isLoading } = useUser();
   //back to login if not log in
    if (isLoading) return null;
-  if (!user) {router.push('/auth/login?returnTo=/educator-experience'); return null; }
+  // Reason: Always funnel users through Dashboard Selection after login.
+  // Redirect guests to local login UI with `returnTo=/dashboard-selection`.
+  if (!user) {router.push('/?returnTo=/dashboard-selection'); return null; }
 
-/*  const handleSelect = (type: 'educator' | 'student') => {
+  const handleSelect = (type: 'educator' | 'student') => {
     console.log('Selected dashboard type:', type);
 
-  };*/
-
+  };
   return <EducatorDashboard />;
 }

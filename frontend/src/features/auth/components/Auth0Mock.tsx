@@ -122,8 +122,13 @@ export default function Auth0Mock({ onLogin }: Auth0MockProps) {
                 className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-base font-medium text-gray-500 hover:bg-gray-50 cursor-pointer"
                 type="button"
                 onClick={() => {
+                  // Reason: Use intended destination from query (?returnTo=...)
+                  // and default to the dashboard selection page so users can choose role.
                   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-                  const returnTo = encodeURIComponent(`${origin}/educator-experience`);
+                  const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+                  const rt = params.get('returnTo') || '/dashboard-selection';
+                  const absolute = `${origin}${rt.startsWith('/') ? rt : `/${rt}`}`;
+                  const returnTo = encodeURIComponent(absolute);
                   window.location.href = `/auth/login?connection=google-oauth2&returnTo=${returnTo}`;
                 }}
               >
@@ -142,8 +147,12 @@ export default function Auth0Mock({ onLogin }: Auth0MockProps) {
                 className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-base font-medium text-gray-500 hover:bg-gray-50 cursor-pointer"
                 type="button"
                 onClick={() => {
+                  // Reason: Respect ?returnTo=...; fallback to dashboard selection (student/educator choice).
                   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-                  const returnTo = encodeURIComponent(`${origin}/educator-experience`);
+                  const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+                  const rt = params.get('returnTo') || '/dashboard-selection';
+                  const absolute = `${origin}${rt.startsWith('/') ? rt : `/${rt}`}`;
+                  const returnTo = encodeURIComponent(absolute);
                   window.location.href = `/auth/login?connection=github&returnTo=${returnTo}`;
                 }}
               >

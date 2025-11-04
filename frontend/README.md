@@ -137,6 +137,17 @@ npm run dev
 
 This is a private repository for the EDUHENS project. For contributions, please contact the development team.
 
+## 🔒 Denylist Guard
+
+- Commits and CI fail if a banned keyword (case-insensitive) appears in the repo.
+- Local setup: enable provided Git hooks so commits are checked before push.
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The CI workflow runs `tools/denylist-check.js` on every push and PR.
+
 ## 📄 License
 
 Private - All rights reserved by EDUHENS.
