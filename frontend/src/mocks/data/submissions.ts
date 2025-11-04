@@ -1,5 +1,9 @@
 import type { StudentSubmission } from '../../features/educator-experience/types';
 
+// TODO(db): Replace mock submissions with API-backed data.
+// - Use GET /tasks/:id/submissions (or similar) to fetch per-task submissions
+// - Keep this file only as a fallback for local/demo usage
+
 const studentNames = [
   'James Rodriguez', 'Hang Nguyen', 'Emma Johnson', 'Sofia Laaksonen', 'Liam Smith',
   'Aino Korhonen', 'Marcus Chen', 'Isabella Garcia', 'Oliver Thompson', 'Zara Ahmed',

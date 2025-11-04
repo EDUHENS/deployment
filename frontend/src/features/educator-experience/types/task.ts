@@ -26,3 +26,7 @@ export interface Task {
   isDraft?: boolean;
   formData?: TaskFormData;
 }
+
+// TODO(db): Ensure this type matches backend schema exactly.
+// - Decide if formData is embedded (JSON) or fetched via a separate endpoint
+// - Align field names (snake_case vs camelCase) and required/optional flags

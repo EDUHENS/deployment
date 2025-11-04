@@ -13,6 +13,10 @@ import type {
 } from '../../types';
 import { CheckCircle2, XCircle, Eye, Save, Calendar, Copy, Share } from 'lucide-react';
 
+// TODO(db): Drive `submissions`, `educatorSubmissions`, and `approvedGrades` from API.
+// - Fetch per-task submissions on selection
+// - Persist educator decisions and approvals to backend services
+
 interface OngoingTasksProps {
   taskTitle: string;
   submissions: StudentSubmission[];

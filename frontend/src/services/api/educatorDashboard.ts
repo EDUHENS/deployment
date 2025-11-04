@@ -1,3 +1,8 @@
+/**
+ * TODO LIST:
+ * After db implemenate 
+ * TODO(db): 把 fetchDashboardBootstrap、generateTaskWithAI 換成實際 API；定義與後端對應的 URL 與型別
+ */
 import type {
   Task,
   TaskFormData,

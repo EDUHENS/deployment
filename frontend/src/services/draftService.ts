@@ -1,4 +1,9 @@
 // Draft service for backend integration
+/**
+ * TODO LIST:
+ * After db implemenate 
+ * TODO(db): 以真實 API 實作 saveDraft/getDrafts/updateDraft/deleteDraft
+ */
 import type { TaskFormData } from '../features/educator-experience/types';
 
 export interface DraftTask {

@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { ChevronDown, ArrowRight, FileText } from 'lucide-react';
 
 export interface TaskItemProps {
+  // CHANGED: optional id to support future DB-driven behaviors
+  id?: number;
   title: string;
   dueDate: number; // days until due
   isExpanded?: boolean;
@@ -30,6 +32,7 @@ export default function TaskItem({
   isDraft = false,
   hideChevron = false
 }: TaskItemProps) {
+  // TODO(db): Use `id` (if provided) to send analytics or fetch per-task details.
   const [isLocalHovered, setIsLocalHovered] = useState(false);
   const isHoveredState = isHovered || isLocalHovered;
 

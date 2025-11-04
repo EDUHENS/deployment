@@ -13,6 +13,9 @@ import {
 } from '@/features/student-experience/constants/taskContent';
 import SubmissionFeedbackPanel from './SubmissionFeedbackPanel';
 
+// TODO(db): Ensure student view reads the same TaskFormData schema as educator.
+// - When integrating backend, map StudentTask to TaskFormData fields for consistency
+
 interface StudentTaskSummaryProps {
   task: StudentTask;
   onBackToWorkspace: () => void;

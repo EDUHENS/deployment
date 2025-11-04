@@ -3,6 +3,10 @@
 import { FormInput, RubricInput } from '../../../../shared/components/forms';
 import type { TaskFormData } from '../../types';
 
+// TODO(db): Initialize `data` from backend TaskFormData.
+// - Load via GET /tasks/:id/form when a task is selected
+// - Persist changes via PUT /tasks/:id/form or draft endpoint in onChange/onSave
+
 export interface TaskCreationFormProps {
   data: TaskFormData;
   onChange: (data: TaskFormData) => void;
@@ -103,7 +107,7 @@ export default function TaskCreationForm({ data, onChange }: TaskCreationFormPro
           </div>
           
           <RubricInput
-            value={data.rubric}
+            value={data.rubric || []}
             onChange={(value) => onChange({ ...data, rubric: value })}
           />
         </div>

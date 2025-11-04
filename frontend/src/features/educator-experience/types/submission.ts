@@ -30,3 +30,7 @@ export interface EducatorSubmission {
 
 export type ApprovedGradesMap = Record<number, boolean>;
 export type EducatorSubmissionsMap = Record<number, EducatorSubmission>;
+
+// TODO(db): Align submission and educator submission types with backend schema.
+// - Confirm date/time formats (ISO strings vs Date)
+// - Confirm allowed status values and assessment outcomes

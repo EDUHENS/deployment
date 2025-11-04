@@ -39,6 +39,8 @@ export default function Sidebar({
   disableExpand = false,
   onLogout,
 }: SidebarProps) {
+  // TODO(db): When a task is selected, fetch its latest form/submission state from API.
+  // - Use task.id to request GET /tasks/:id and GET /tasks/:id/form
   const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
   const [expandedTaskIds, setExpandedTaskIds] = useState<number[]>([]);
   const [showUserModal, setShowUserModal] = useState(false);
@@ -54,12 +56,9 @@ export default function Sidebar({
     task.title.toLowerCase().includes(localSearchQuery.toLowerCase())
   );
 
+  // CHANGED: Accordion behavior — keep only one expanded at a time
   const handleTaskToggle = (taskId: number) => {
-    setExpandedTaskIds(prev =>
-      prev.includes(taskId)
-        ? prev.filter(id => id !== taskId)
-        : [...prev, taskId]
-    );
+    setExpandedTaskIds((prev) => (prev.includes(taskId) ? [] : [taskId]));
   };
 
   const handleManageReview = (task: Task) => {
@@ -230,7 +229,7 @@ export default function Sidebar({
               ) : (
                 <TaskItem
                   key={task.id}
-                  id={task.id}
+                  id={task.id} // CHANGED: pass id for future DB use
                   title={task.title}
                   dueDate={task.dueDate}
                   isExpanded={disableExpand ? false : expandedTaskIds.includes(task.id)}

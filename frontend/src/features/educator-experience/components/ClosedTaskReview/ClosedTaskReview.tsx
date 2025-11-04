@@ -1,5 +1,8 @@
 'use client';
 
+// TODO(db): Replace any mock-derived props with API data for closed tasks.
+// - Load submissions and educator decisions for closed/overdue tasks
+
 import { useState, useEffect } from 'react';
 import { Layout3, Header } from '../../../../shared/components/layout';
 import { SubmissionsTable, Pagination, SummaryCard } from '../../../../shared/components/ui';

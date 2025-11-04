@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { CircleX, CheckCircle, FileText, Github } from 'lucide-react';
 
+// TODO(db): Wire approve and educator submission actions to backend.
+// - Persist educatorGrade/feedback
+// - Reflect approved state from server on reopen
+
 interface SubmissionDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;

@@ -1,5 +1,10 @@
 import type { Task, TaskFormData } from '../../features/educator-experience/types';
 
+// TODO(db): Replace all mock data in this file with API-backed data.
+// - mockTasks should come from GET /tasks
+// - defaultTaskFormData should only be used as an empty template
+// - If each task has specific formData, expose it via GET /tasks/:id/form
+
 export const defaultTaskFormData: TaskFormData = {
   title: 'Building RESTful APIs with Node.js and Express: A Comprehensive Backend Development Project',
   objective: 'By the end of this task, you will be able to design, implement, and deploy a complete RESTful API using Node.js and Express.js.',
@@ -17,6 +22,8 @@ export const defaultTaskFormData: TaskFormData = {
 };
 
 export const mockTasks: Task[] = [
+  // TODO(db): Replace this list with server data; include per-task formData
+  // if your backend returns it, or lazily fetch via GET /tasks/:id/form.
   {
     id: 1,
     title: 'Understanding and Applying React Props in Component-Based Development',

@@ -5,7 +5,14 @@ interface RubricInputProps {
   onChange: (value: string[][]) => void;
 }
 
-export default function RubricInput({ value, onChange }: RubricInputProps) {
+/** 
+ * add 
+ * value =  [], onChange = () =>{}  to allow rubric empty
+ * thr origin code is value , onChange 
+*/
+export default function RubricInput({ value =  [], onChange = () =>{} }: RubricInputProps) {
+
+
   const handleRubricChange = (row: number, col: number, newValue: string) => {
     const newRubric = [...value];
     if (!newRubric[row]) newRubric[row] = [];
