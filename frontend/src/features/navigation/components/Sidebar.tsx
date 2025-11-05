@@ -1,7 +1,8 @@
 'use client';
 
 import Image from 'next/image';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { updateMe } from '@/services/authApi';
 import TaskItem from './TaskItem';
 import { Search, Minimize2, Maximize2, X, LogOut, FileText } from 'lucide-react';
 import type { Task } from '../../educator-experience/types';
@@ -24,6 +25,7 @@ export interface SidebarProps {
   /** When true, render TaskItem but keep it collapsed (no expansion), clicking row triggers onTaskClick */
   disableExpand?: boolean;
   onLogout?: () => void;
+  onProfileUpdated?: () => void;
 }
 
 export default function Sidebar({
@@ -38,6 +40,7 @@ export default function Sidebar({
   simpleTasks = false,
   disableExpand = false,
   onLogout,
+  onProfileUpdated,
 }: SidebarProps) {
   // TODO(db): When a task is selected, fetch its latest form/submission state from API.
   // - Use task.id to request GET /tasks/:id and GET /tasks/:id/form
@@ -46,6 +49,13 @@ export default function Sidebar({
   const [showUserModal, setShowUserModal] = useState(false);
   const [userName, setUserName] = useState(userProfile?.name || 'Dr. Sarah Johnson');
   const roleLabel = userProfile?.role ?? 'Educator';
+
+  // Keep local editable name in sync with incoming profile
+  useEffect(() => {
+    if (userProfile?.name && userProfile.name !== userName) {
+      setUserName(userProfile.name);
+    }
+  }, [userProfile?.name]);
 
   const handleSearchChange = (value: string) => {
     setLocalSearchQuery(value);
@@ -321,9 +331,22 @@ export default function Sidebar({
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  // Handle save settings
-                  setShowUserModal(false);
+                onClick={async () => {
+                  try {
+                    const trimmed = (userName || '').trim();
+                    if (trimmed) {
+                      // Split into first/last; backend also accepts full_name
+                      const parts = trimmed.split(/\s+/);
+                      const first = parts.shift() || '';
+                      const last = parts.join(' ');
+                      await updateMe({ firstName: first, lastName: last, fullName: trimmed });
+                    }
+                    // Ask parent to refresh profile from backend
+                    onProfileUpdated?.();
+                    setShowUserModal(false);
+                  } catch (e) {
+                    console.error('Failed to save profile name', e);
+                  }
                 }}
                 className="flex-1 px-4 py-2 bg-[#484de6] text-white rounded-lg hover:bg-[#3A3FE4] transition-colors duration-200 cursor-pointer"
               >

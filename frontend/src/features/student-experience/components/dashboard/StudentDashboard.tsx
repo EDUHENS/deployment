@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { MainLayout } from '@/shared/components/layout';
 import EnrollTaskView from '../enroll/EnrollTaskView';
 import StudentTaskWorkspace from '../workspace/StudentTaskWorkspace';
@@ -10,6 +10,7 @@ import SubmissionSubmittedModal from '../modals/SubmissionSubmittedModal';
 import { useStudentTasks } from '../../hooks/useStudentTasks';
 import type { StudentTask } from '../../types/studentTask';
 import type { Task as SidebarTask } from '@/features/educator-experience/types';
+import { getMe } from '@/services/authApi';
 
 interface StudentDashboardProps {
   onLogout?: () => void;
@@ -21,6 +22,7 @@ export default function StudentDashboard({ onLogout }: StudentDashboardProps) {
   const [showSavedModal, setShowSavedModal] = useState(false);
   const [showSubmittedModal, setShowSubmittedModal] = useState(false);
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
+  const [userProfile, setUserProfile] = useState<{ name: string; avatar?: string; role?: string }>();
 
   const selectedTask: StudentTask | undefined = useMemo(
     () => tasks.find((task) => task.id === selectedTaskId ?? undefined),
@@ -51,10 +53,6 @@ export default function StudentDashboard({ onLogout }: StudentDashboardProps) {
     setShowSubmittedModal(true);
   };
 
-  if (loading && tasks.length === 0) {
-    return <div className="flex h-screen items-center justify-center">Loading tasks…</div>;
-  }
-
   const showSummary = selectedTask && ['graded', 'closed'].includes(selectedTask.status);
 
   // Map student tasks to educator sidebar task shape so they render in the shared Sidebar
@@ -71,6 +69,41 @@ export default function StudentDashboard({ onLogout }: StudentDashboardProps) {
       isDraft: false,
     };
   });
+
+  // Load current user profile for sidebar (must be before any early returns)
+  useEffect(() => {
+    (async () => {
+      try {
+        const me = await getMe();
+        if (!me?.ok) return;
+        const u = me.user || {};
+        const first = u.first_name?.toString().trim();
+        const last = u.last_name?.toString().trim();
+        const name = [first, last].filter(Boolean).join(' ') || u.email || 'User';
+        const primary = (u.primary_role || (Array.isArray(u.roles) ? u.roles[0] : '')) as string;
+        const role = primary ? primary.charAt(0).toUpperCase() + primary.slice(1) : 'Student';
+        setUserProfile({ name, avatar: u.picture, role });
+      } catch {}
+    })();
+  }, []);
+
+  if (loading && tasks.length === 0) {
+    return <div className="flex h-screen items-center justify-center">Loading tasks…</div>;
+  }
+
+  const refreshProfile = async () => {
+    try {
+      const me = await getMe();
+      if (!me?.ok) return;
+      const u = me.user || {};
+      const first = u.first_name?.toString().trim();
+      const last = u.last_name?.toString().trim();
+      const name = [first, last].filter(Boolean).join(' ') || u.email || 'User';
+      const primary = (u.primary_role || (Array.isArray(u.roles) ? u.roles[0] : '')) as string;
+      const role = primary ? primary.charAt(0).toUpperCase() + primary.slice(1) : 'Student';
+      setUserProfile({ name, avatar: u.picture, role });
+    } catch {}
+  };
 
   return (
     <>
@@ -105,12 +138,9 @@ export default function StudentDashboard({ onLogout }: StudentDashboardProps) {
         searchQuery=""
         simpleTasks={false}
         disableExpand
-        userProfile={{
-          name: 'John Smith',
-          avatar: 'https://i.pravatar.cc/64?img=12',
-          role: 'Student'
-        }}
+        userProfile={userProfile}
         onLogout={onLogout}
+        onProfileUpdated={refreshProfile}
       />
       
       <SubmissionSavedModal isOpen={showSavedModal} onClose={() => setShowSavedModal(false)} />

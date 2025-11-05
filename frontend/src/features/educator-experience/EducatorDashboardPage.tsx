@@ -16,6 +16,7 @@ import type { Task, TaskFormData, StudentSubmission, EducatorSubmissionsMap, App
 import { mockTasks, defaultTaskFormData } from '@/mocks/data/tasks'; // CHANGED: Use existing project mock tasks
 import { fetchDashboardBootstrap } from '@/services/api/educatorDashboard'; // CHANGED
 import { OngoingTasks } from './components'; // CHANGED
+import { getMe } from '@/services/authApi';
 
 export default function EducatorDashboard() {
   // CHANGED: Sidebar/UI state, mirrors App.tsx usage
@@ -30,6 +31,7 @@ export default function EducatorDashboard() {
   const [taskFormData, setTaskFormData] = useState<TaskFormData>(defaultTaskFormData);
   const [educatorSubmissions, setEducatorSubmissions] = useState<EducatorSubmissionsMap>({});
   const [approvedGrades, setApprovedGrades] = useState<ApprovedGradesMap>({});
+  const [userProfile, setUserProfile] = useState<{ name: string; avatar?: string; role?: string }>();
 
   // CHANGED: Initial tasks (using mockTasks; drafts can be added later)
   const tasks: Task[] = mockTasks;
@@ -67,8 +69,41 @@ export default function EducatorDashboard() {
         setApprovedGrades(data.approvedGrades || {});
       })
       .catch((e) => console.error('Educator bootstrap failed', e));
+
+    // Fetch logged-in user to populate sidebar profile
+    (async () => {
+      try {
+        const me = await getMe();
+        if (!alive || !me?.ok) return;
+        const u = me.user || {};
+        const first = u.first_name?.toString().trim();
+        const last = u.last_name?.toString().trim();
+        const name = [first, last].filter(Boolean).join(' ') || u.email || 'User';
+        const primary = (u.primary_role || (Array.isArray(u.roles) ? u.roles[0] : '')) as string;
+        const role = primary ? primary.charAt(0).toUpperCase() + primary.slice(1) : undefined;
+        setUserProfile({ name, avatar: u.picture, role });
+      } catch (e) {
+        console.error('Failed to load user profile for sidebar', e);
+      }
+    })();
     return () => { alive = false; };
   }, []);
+
+  const refreshProfile = async () => {
+    try {
+      const me = await getMe();
+      if (!me?.ok) return;
+      const u = me.user || {};
+      const first = u.first_name?.toString().trim();
+      const last = u.last_name?.toString().trim();
+      const name = [first, last].filter(Boolean).join(' ') || u.email || 'User';
+      const primary = (u.primary_role || (Array.isArray(u.roles) ? u.roles[0] : '')) as string;
+      const role = primary ? primary.charAt(0).toUpperCase() + primary.slice(1) : undefined;
+      setUserProfile({ name, avatar: u.picture, role });
+    } catch (e) {
+      // ignore refresh error
+    }
+  };
 
   // CHANGED: Main panel (landing vs OngoingTasks after a task is selected)
   const mainDashboard = (
@@ -125,9 +160,9 @@ export default function EducatorDashboard() {
       onTaskClick={handleTaskClick}
       searchQuery={searchQuery}
       onSearchChange={setSearchQuery}
-      
-      userProfile={{ name: 'Dr. Sarah Johnson', role: 'Educator' }}
+      userProfile={userProfile}
       onLogout={handleLogout} // CHANGED: pass logout to Sidebar
+      onProfileUpdated={refreshProfile}
     />
   );
 }

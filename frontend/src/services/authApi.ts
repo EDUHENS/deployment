@@ -71,3 +71,16 @@ export async function removeUserRole(userId: string, role: string) {
   });
   return res.json();
 }
+
+export async function updateMe(profile: { firstName?: string; lastName?: string; picture?: string; fullName?: string }) {
+  const body: any = {};
+  if (profile.firstName !== undefined) body.first_name = profile.firstName;
+  if (profile.lastName !== undefined) body.last_name = profile.lastName;
+  if (profile.picture !== undefined) body.picture = profile.picture;
+  if (profile.fullName !== undefined) body.full_name = profile.fullName;
+  const res = await authFetch(`${BACKEND_URL}/api/auth/me`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}

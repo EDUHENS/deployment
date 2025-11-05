@@ -226,6 +226,53 @@ module.exports = (requireAuth) => {
     }
   });
 
+  // Update current user's profile (first_name, last_name, picture)
+  router.patch('/me', requireAuth, async (req, res) => {
+    try {
+      const claims = req.auth.payload;
+      const user = await userModel.findByAuth0Id(claims.sub);
+      if (!user) return res.status(404).json({ ok: false, error: 'User not found' });
+
+      const { first_name, last_name, picture, full_name } = req.body || {};
+      let fn = first_name, ln = last_name;
+      if ((!fn || !ln) && typeof full_name === 'string' && full_name.trim()) {
+        const parts = full_name.trim().split(/\s+/);
+        fn = fn || parts.shift();
+        ln = ln || parts.join(' ');
+      }
+
+      const updated = await userModel.updateUserProfile(user.id, {
+        first_name: typeof fn === 'string' ? fn : undefined,
+        last_name: typeof ln === 'string' ? ln : undefined,
+        picture: typeof picture === 'string' ? picture : undefined,
+      });
+
+      // also return roles and primary role to keep caller in sync
+      const roles = await userModel.getUserRoles(updated.id);
+      const roleNames = roles.map(r => r.role);
+      const primaryRole = await userModel.getPrimaryRole(updated.id);
+
+      res.json({
+        ok: true,
+        user: {
+          id: updated.id,
+          email: updated.email,
+          first_name: updated.first_name,
+          last_name: updated.last_name,
+          email_verified: updated.email_verified,
+          picture: updated.picture,
+          created_at: updated.created_at,
+          roles: roleNames,
+          primary_role: primaryRole,
+          has_any_role: roleNames.length > 0,
+        }
+      });
+    } catch (error) {
+      console.error('Error in PATCH /api/auth/me:', error);
+      res.status(500).json({ ok: false, error: 'Failed to update user profile' });
+    }
+  });
+
   // Secure endpoint example
   router.get('/secure', requireAuth, syncAuth0User, (req, res) => {
     res.json({ 

@@ -21,6 +21,7 @@ export interface MainLayoutProps {
   simpleTasks?: boolean;
   disableExpand?: boolean;
   onLogout?: () => void;
+  onProfileUpdated?: () => void;
 }
 
 export default function MainLayout({
@@ -36,6 +37,7 @@ export default function MainLayout({
   simpleTasks = false,
   disableExpand = false,
   onLogout,
+  onProfileUpdated,
 }: MainLayoutProps) {
   return (
     <div className="bg-[#E6E6E6] h-screen max-h-screen grid grid-cols-[auto_1fr] gap-px overflow-hidden">
@@ -52,6 +54,7 @@ export default function MainLayout({
         simpleTasks={simpleTasks}
         disableExpand={disableExpand}
         onLogout={onLogout}
+        onProfileUpdated={onProfileUpdated}
       />
 
       {/* Layout1 */}

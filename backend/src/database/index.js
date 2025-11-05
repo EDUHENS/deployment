@@ -53,6 +53,25 @@ const userModel = {
     }
   },
 
+  async updateUserProfile(userId, { first_name, last_name, picture }) {
+    try {
+      const fields = [];
+      const values = [];
+      let idx = 1;
+      if (typeof first_name === 'string') { fields.push(`first_name = $${idx++}`); values.push(first_name); }
+      if (typeof last_name === 'string')  { fields.push(`last_name  = $${idx++}`); values.push(last_name); }
+      if (typeof picture === 'string')    { fields.push(`picture    = $${idx++}`); values.push(picture); }
+      if (fields.length === 0) return await this.findById(userId);
+      const sql = `UPDATE users SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${idx} RETURNING *`;
+      values.push(userId);
+      const result = await pool.query(sql, values);
+      return result.rows[0];
+    } catch (error) {
+      console.error('Error updating user profile:', error);
+      throw error;
+    }
+  },
+
   // find user by auth0_id 
   async findByAuth0Id(auth0Id) {
     try {
@@ -102,15 +121,23 @@ const userModel = {
       if (existingUser) {
         const result = await pool.query(
           `UPDATE users 
-           SET email = $1, email_verified = $2, first_name = $3, last_name = $4, picture = $5, updated_at = CURRENT_TIMESTAMP
+           SET 
+             email = $1,
+             email_verified = $2,
+             first_name = CASE WHEN first_name IS NULL OR first_name = '' THEN $3 ELSE first_name END,
+             last_name  = CASE WHEN last_name  IS NULL OR last_name  = '' THEN $4 ELSE last_name  END,
+             picture = $5,
+             updated_at = CURRENT_TIMESTAMP
            WHERE auth0_id = $6 
            RETURNING *`,
-          [email, 
-           email_verified, 
-           given_name || nickname || '', 
-           family_name || '', 
-           picture, 
-           auth0Id]
+          [
+            email,
+            email_verified,
+            given_name || nickname || '',
+            family_name || '',
+            picture,
+            auth0Id,
+          ]
         );
         return result.rows[0];
       }
