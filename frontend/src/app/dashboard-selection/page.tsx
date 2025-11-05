@@ -4,12 +4,30 @@
 import DashboardSelection from '@/features/dashboard-selection/components/DashboardSelection';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@auth0/nextjs-auth0/client';
+import { useEffect } from 'react';
+import { getMe } from '@/services/authApi';
 
 export default function DashboardSelectionPage() {
   const router = useRouter();
   const { user, isLoading } = useUser();
+
+  // Reason: Ensure hooks are called unconditionally across renders.
+  // We still mount the effect every render, but gate its body by `isLoading`/`user`.
+  useEffect(() => {
+    if (isLoading || !user) return;
+    (async () => {
+      try {
+        console.log('[DashboardSelection] calling getMe() to sync user');
+        await getMe();
+        console.log('[DashboardSelection] getMe() finished');
+      } catch {
+        console.error('[DashboardSelection] getMe() failed');
+      }
+    })();
+  }, [isLoading, user]);
+
   //back to login if not log in
-   if (isLoading) return null;
+  if (isLoading) return null;
   // Reason: Avoid hitting SDK route "/auth/login" which triggers Auth0 Hosted Login directly.
   // Redirect to our app's local login page instead, preserving intended destination.
   if (!user) { router.push('/?returnTo=/dashboard-selection'); return null; }

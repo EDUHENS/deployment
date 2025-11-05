@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+# Pre-commit denylist check. Fails commit if banned keywords are found.
+node tools/denylist-check.js
+status=$?
+if [ $status -ne 0 ]; then
+  echo "\nCommit blocked: denylist check failed."
+  echo "Banned keyword present (case-insensitive)."
+  exit $status
+fi
+exit 0

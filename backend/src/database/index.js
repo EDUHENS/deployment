@@ -95,7 +95,7 @@ const userModel = {
       nickname 
     } = auth0User;
     
-    console.log('Debug: get Auth0 data:', { given_name, family_name, nickname }); 
+    console.log('Debug: get Auth0 data:', { given_name, family_name, nickname,email }); 
     
     try {
       const existingUser = await this.findByAuth0Id(auth0Id);
@@ -187,7 +187,7 @@ const userModel = {
     }
   },
 
-  // 角色相關方法
+  // assign role to user
   async assignRole(userId, role) {
     try {
       const result = await pool.query(
@@ -200,6 +200,19 @@ const userModel = {
       return result.rows[0];
     } catch (error) {
       console.error('Error assigning role:', error);
+      throw error;
+    }
+  },
+
+  async removeRole(userId, role) {
+    try {
+      const result = await pool.query(
+        `DELETE FROM user_roles WHERE user_id = $1 AND role = $2 RETURNING *`,
+        [userId, role]
+      );
+      return result.rows[0];
+    } catch (error) {
+      console.error('Error removing role:', error);
       throw error;
     }
   },
@@ -243,6 +256,28 @@ const userModel = {
     } catch (error) {
       console.error('Error checking if user has any role:', error);
       return false;
+    }
+  },
+
+  async listUsersWithRoles(limit = 200, offset = 0) {
+    try {
+      const result = await pool.query(
+        `SELECT u.id, u.email, u.first_name, u.last_name, u.picture, u.email_verified, u.created_at,
+                COALESCE(json_agg(ur.role) FILTER (WHERE ur.role IS NOT NULL), '[]') AS roles
+         FROM users u
+         LEFT JOIN user_roles ur ON ur.user_id = u.id
+         GROUP BY u.id
+         ORDER BY u.created_at DESC
+         LIMIT $1 OFFSET $2`,
+        [limit, offset]
+      );
+      return result.rows.map(r => ({
+        ...r,
+        roles: Array.isArray(r.roles) ? r.roles : []
+      }));
+    } catch (error) {
+      console.error('Error listing users with roles:', error);
+      throw error;
     }
   },
 

@@ -5,6 +5,12 @@ import { NextResponse } from "next/server";
 // Customize the Auth0 client to gracefully handle callback errors
 // e.g., when the user cancels at the IdP and Auth0 redirects back with error=access_denied
 export const auth0 = new Auth0Client({
+  // Reason: Request API tokens for the backend by default so /auth/access-token
+  // returns a token the backend accepts (audience must match backend's expected audience).
+  authorizationParameters: {
+    audience: process.env.AUTH0_AUDIENCE,
+    scope: process.env.AUTH0_SCOPE || "openid profile email offline_access",
+  },
   onCallback: async (error, ctx) => {
     const baseUrl = process.env.APP_BASE_URL || process.env.AUTH0_BASE_URL || "http://localhost:3000";
     // Reason: Default post-login destination is Dashboard Selection when no returnTo is provided.

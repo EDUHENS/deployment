@@ -16,18 +16,56 @@ module.exports = (requireAuth) => {
           family_name: claims.family_name,
           nickname: claims.nickname
         });
-        
-        // Use structure from database/index.js
-        await userModel.createOrUpdateAuth0User({
-          sub: claims.sub,
-          email: claims.email,
-          email_verified: claims.email_verified || false,
-          given_name: claims.given_name,      // Will map to first_name
-          family_name: claims.family_name,    // Will map to last_name
-          picture: claims.picture,
-          nickname: claims.nickname
-        });
-        console.log('User synced to database successfully');
+
+        // Some IdP / token configurations don't include profile claims in the access token.
+        // Fall back to /userinfo when email is missing.
+        let email = claims.email;
+        let given_name = claims.given_name;
+        let family_name = claims.family_name;
+        let picture = claims.picture;
+        let nickname = claims.nickname;
+
+        try {
+          if (!email) {
+            const authz = req.headers?.authorization || '';
+            const m = authz.match(/Bearer\s+(.+)/i);
+            const token = m ? m[1] : null;
+            const domain = (process.env.AUTH0_DOMAIN || '').trim();
+            if (token && domain) {
+              const resp = await fetch(`https://${domain}/userinfo`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (resp.ok) {
+                const u = await resp.json();
+                email = u.email || email;
+                given_name = u.given_name || given_name;
+                family_name = u.family_name || family_name;
+                picture = u.picture || picture;
+                nickname = u.nickname || nickname;
+                console.log('Fetched userinfo from Auth0 to complete profile');
+              } else {
+                console.warn('Failed to fetch /userinfo:', resp.status, resp.statusText);
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Error fetching /userinfo fallback:', e);
+        }
+
+        if (!email) {
+          console.warn('Auth0 profile has no email. Skipping DB sync for sub:', claims.sub);
+        } else {
+          await userModel.createOrUpdateAuth0User({
+            sub: claims.sub,
+            email,
+            email_verified: claims.email_verified || false,
+            given_name,
+            family_name,
+            picture,
+            nickname,
+          });
+          console.log('User synced to database successfully');
+        }
       } catch (error) {
         console.error('Error syncing Auth0 user:', error);
       }
@@ -96,8 +134,29 @@ module.exports = (requireAuth) => {
     };
   };
 
-  // Admin only middleware
-  const requireAdmin = requireRole('admin');
+  // Admin only middleware (role-based or email allowlist for bootstrap)
+  const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  const requireAdmin = async (req, res, next) => {
+    try {
+      const claims = req.auth.payload;
+      const user = await userModel.findByAuth0Id(claims.sub);
+      if (!user) return res.status(404).json({ ok: false, error: 'User not found' });
+
+      const hasAdminRole = await userModel.hasRole(user.id, 'admin');
+      const allowlisted = ADMIN_EMAILS.includes((user.email || '').toLowerCase());
+      if (!hasAdminRole && !allowlisted) {
+        return res.status(403).json({ ok: false, error: 'Admin access required' });
+      }
+      next();
+    } catch (error) {
+      console.error('Error in requireAdmin middleware:', error);
+      res.status(500).json({ ok: false, error: 'Internal server error' });
+    }
+  };
 
   // Check if user has permission to access any dashboard
   const requireAnyDashboardAccess = async (req, res, next) => {
@@ -129,6 +188,11 @@ module.exports = (requireAuth) => {
   // Get current user profile (with role information)
   router.get('/me', requireAuth, syncAuth0User, async (req, res) => {
     try {
+      const rawAuth = req.headers?.authorization || '';
+      console.log('[API /me] Authorization header present:', rawAuth ? 'yes' : 'no');
+      if (rawAuth) {
+        console.log('[API /me] Authorization (first 16 chars):', rawAuth.substring(0, 16) + '...');
+      }
       const claims = req.auth.payload;
       const user = await userModel.findByAuth0Id(claims.sub);
       
@@ -198,6 +262,50 @@ module.exports = (requireAuth) => {
     } catch (error) {
       console.error('Error in /api/auth/sync:', error);
       res.status(500).json({ ok: false, error: 'Failed to sync user' });
+    }
+  });
+
+  // ===== Admin management APIs =====
+  // List users with roles
+  router.get('/users', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { limit, offset } = req.query;
+      const users = await userModel.listUsersWithRoles(
+        Number(limit) || 200,
+        Number(offset) || 0
+      );
+      res.json({ ok: true, users });
+    } catch (error) {
+      console.error('Error in GET /api/auth/users:', error);
+      res.status(500).json({ ok: false, error: 'Failed to list users' });
+    }
+  });
+
+  // Assign role to user
+  router.post('/users/:id/roles', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { role } = req.body || {};
+      if (!role) return res.status(400).json({ ok: false, error: 'Missing role' });
+      await userModel.assignRole(id, role);
+      const roles = await userModel.getUserRoles(id);
+      res.json({ ok: true, roles });
+    } catch (error) {
+      console.error('Error in POST /api/auth/users/:id/roles:', error);
+      res.status(500).json({ ok: false, error: 'Failed to assign role' });
+    }
+  });
+
+  // Remove role from user
+  router.delete('/users/:id/roles/:role', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id, role } = req.params;
+      await userModel.removeRole(id, role);
+      const roles = await userModel.getUserRoles(id);
+      res.json({ ok: true, roles });
+    } catch (error) {
+      console.error('Error in DELETE /api/auth/users/:id/roles/:role:', error);
+      res.status(500).json({ ok: false, error: 'Failed to remove role' });
     }
   });
 

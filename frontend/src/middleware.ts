@@ -13,6 +13,7 @@ export const config = {
     '/auth/:path*',           //login, logout callback / profile
     '/dashboard-selection',   
     '/educator-experience',     // set up first
-    '/student-experience',      // set up for student   
+    '/student-experience',      // set up for student  
+    '/admin/:path*',            // admin tools
   ],
 };

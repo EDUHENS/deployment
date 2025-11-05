@@ -39,11 +39,16 @@ app.use(rateLimit({ windowMs: 60 * 1000, max: 100 }));
 let requireAuth = (_req, _res, next) => next()
 
 if (process.env.AUTH0_AUDIENCE && process.env.AUTH0_DOMAIN) {
+  console.log('[Auth0] Enabling JWT validation middleware');
+  console.log('[Auth0] issuerBaseURL = https://%s/', (process.env.AUTH0_DOMAIN || '').trim());
+  console.log('[Auth0] audience     = %s', (process.env.AUTH0_AUDIENCE || '').trim());
   requireAuth = auth({
     audience: process.env.AUTH0_AUDIENCE,
     issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}/`,
     tokenSigningAlg: 'RS256',
   })
+} else {
+  console.warn('[Auth0] AUTH0_AUDIENCE or AUTH0_DOMAIN not set. requireAuth is NO-OP.');
 }
 
 //auth0
