@@ -40,3 +40,5 @@ Thumbs.db
 # ── Misc (Vite/SSR/local overrides)
 dist-ssr/
 *.local
+# 忽略整個 tools 資料夾
+/tools/
