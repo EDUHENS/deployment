@@ -1,22 +1,24 @@
-// src/app/dashboard-selection/page.tsx
+// src/app/educator-experience/page.tsx
 'use client';
 
-import EducatorDashboard  from  '@/features/educator-experience/EducatorDashboardPage'
+import { useEffect } from 'react';
+import EducatorDashboard from '@/features/educator-experience/EducatorDashboardPage';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@auth0/nextjs-auth0/client';
 
-export default function DashboardSelectionPage() {
+export default function EducatorExperiencePage() {
   const router = useRouter();
   const { user, isLoading } = useUser();
-  //back to login if not log in
-   if (isLoading) return null;
-  // Reason: Always funnel users through Dashboard Selection after login.
-  // Redirect guests to local login UI with `returnTo=/dashboard-selection`.
-  if (!user) {router.push('/?returnTo=/dashboard-selection'); return null; }
 
-  const handleSelect = (type: 'educator' | 'student') => {
-    console.log('Selected dashboard type:', type);
+  // Redirect unauthenticated users after first render (avoid router mutations during render)
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.replace('/?returnTo=/dashboard-selection');
+    }
+  }, [isLoading, user, router]);
 
-  };
+  if (isLoading) return null;
+  if (!user) return null; // waiting for redirect
+
   return <EducatorDashboard />;
 }

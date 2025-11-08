@@ -14,6 +14,7 @@ export const config = {
     '/dashboard-selection',   
     '/educator-experience',     // set up first
     '/student-experience',      // set up for student  
+    '/t/:path*',                // deep link enrollment requires auth
     '/admin/:path*',            // admin tools
   ],
 };

@@ -43,6 +43,8 @@ export interface StudentTask {
   objective: string;
   instructions: string[];
   submissionChecklist: string[];
+  assessmentCriteria?: string[];
+  rubric?: string[][];
   hints?: string[];
   submission?: StudentSubmissionDraft;
   summary?: StudentTaskSummary;

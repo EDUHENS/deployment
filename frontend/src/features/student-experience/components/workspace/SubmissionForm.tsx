@@ -31,6 +31,8 @@ export default function SubmissionForm({
   const [notes, setNotes] = useState(initialNotes);
   const [showHensModal, setShowHensModal] = useState(false);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const hasContent = (arr: any[], key: string) => Array.isArray(arr) && arr.some((x) => (x?.[key] || '').trim());
+  const canAssess = hasContent(files, 'name') || hasContent(links, 'url') || (notes || '').trim().length > 0;
 
   const handleAddFile = () => {
     setFiles([...files, { id: crypto.randomUUID(), name: '' }]);
@@ -210,7 +212,8 @@ export default function SubmissionForm({
           <button
             type="button"
             onClick={handleHensAssessment}
-            className="flex-1 bg-[#f5f8ff] border-2 border-[#c7d7fe] rounded-[4px] flex gap-[7px] items-center justify-center px-[32px] py-[16px] hover:bg-[#eef2ff] cursor-pointer"
+            disabled={!canAssess}
+            className={`flex-1 border-2 rounded-[4px] flex gap-[7px] items-center justify-center px-[32px] py-[16px] ${canAssess ? 'bg-[#f5f8ff] border-[#c7d7fe] hover:bg-[#eef2ff] cursor-pointer' : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'}`}
           >
             <Sparkles className="size-[14px] text-[#484de6]" />
             <p className="font-normal text-[16px] leading-[1.5] tracking-[0.32px]">

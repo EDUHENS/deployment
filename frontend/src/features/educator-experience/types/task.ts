@@ -17,7 +17,7 @@ export interface TaskFormData {
 }
 
 export interface Task {
-  id: number;
+  id: string | number;
   title: string;
   dueDate: number;
   submissions?: number;

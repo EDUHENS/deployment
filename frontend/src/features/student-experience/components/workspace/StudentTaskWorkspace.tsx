@@ -9,12 +9,7 @@ import DueStatusIndicator from '../shared/DueStatusIndicator';
 import SubmissionForm from './SubmissionForm';
 import type { StudentTask } from '@/features/student-experience/types/studentTask';
 import { getDueStatus } from '@/features/student-experience/utils/dates';
-import {
-  RESOURCE_LINKS,
-  REFLECTION_PROMPTS,
-  ASSESSMENT_CRITERIA,
-  SUPPORT_EXAMPLES,
-} from '@/features/student-experience/constants/taskContent';
+import { RESOURCE_LINKS, REFLECTION_PROMPTS, SUPPORT_EXAMPLES } from '@/features/student-experience/constants/taskContent';
 
 interface SubmissionPayload {
   files: Array<{ id: string; name: string }>;
@@ -129,12 +124,35 @@ export default function StudentTaskWorkspace({ task, onSaveSubmission, onSubmitS
                 Your work will be evaluated based on these criteria:
               </p>
               <ul className="list-disc space-y-2 pl-[24px] text-[16px] font-normal tracking-[0.32px] text-[#414651]">
-                {ASSESSMENT_CRITERIA.map((criterion) => (
+                {(task.assessmentCriteria ?? []).map((criterion) => (
                   <li key={criterion} className="leading-[1.5]">
                     {criterion}
                   </li>
                 ))}
               </ul>
+
+              {Array.isArray(task.rubric) && task.rubric.length > 0 && (
+                <div className="mt-4 bg-[#e6e6e6] border border-[#e6e6e6] rounded-[4px] p-2">
+                  <div className="grid grid-cols-[repeat(5,_minmax(0,_1fr))] auto-rows-fr gap-[2px] max-h-[575px]">
+                    {task.rubric[0]?.map((header, colIndex) => (
+                      <div key={colIndex} className="bg-[#2d2e34] flex items-center p-4 rounded-[2px]">
+                        <p className="text-[#f8f8f8] text-[12px] tracking-[0.24px] leading-[1.5] break-words whitespace-pre-wrap">
+                          {header || `Column ${colIndex + 1}`}
+                        </p>
+                      </div>
+                    ))}
+                    {task.rubric.slice(1).map((row, rowIndex) => (
+                      row.map((cell, colIndex) => (
+                        <div key={`${rowIndex}-${colIndex}`} className="bg-white flex items-start p-2 rounded-[2px]">
+                          <p className="text-black text-[12px] tracking-[0.24px] leading-[1.5] break-words whitespace-pre-wrap">
+                            {cell || '-'}
+                          </p>
+                        </div>
+                      ))
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </TaskSection>
 

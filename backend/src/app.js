@@ -60,6 +60,10 @@ const requireAuth = auth({
 });
 */ 
 const auth0Route = require('./routes/auth0Route')(requireAuth);
+const tasksRoute = require('./routes/tasksRoute')(requireAuth);
+const tasksAiRoute = require('./routes/tasksAiRoute')(requireAuth);
+const enrollRoute = require('./routes/enrollRoute')(requireAuth);
+const submissionsRoute = require('./routes/submissionsRoute')(requireAuth);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
@@ -84,6 +88,10 @@ app.get('/api/db-connect', async (_req, res) => {
 });
 //get me from routes
 app.use('/api/auth', auth0Route);
+app.use('/api/tasks', tasksRoute);
+app.use('/api/tasks/ai', tasksAiRoute);
+app.use('/api/enroll', enrollRoute);
+app.use('/api/submissions', submissionsRoute);
 
 const initializeApp = async () => {
   const dbConnected = await connectDB();

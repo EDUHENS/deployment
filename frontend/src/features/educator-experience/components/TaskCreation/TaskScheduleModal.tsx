@@ -15,6 +15,18 @@ export default function TaskScheduleModal({ isOpen, onClose, onSave }: TaskSched
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
 
   const handleSave = () => {
+    // Guard: start date cannot be before today (00:00)
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    if (startDate && startDate < todayStart) {
+      alert('Start date cannot be before today.');
+      return;
+    }
+    // Guard: end date cannot be before start date
+    if (startDate && endDate && endDate < startDate) {
+      alert('End date cannot be before start date.');
+      return;
+    }
     const startTime = startDate ? startDate.toTimeString().slice(0, 5) : undefined;
     const endTime = endDate ? endDate.toTimeString().slice(0, 5) : undefined;
     onSave(startDate || null, endDate || null, startTime, endTime);
@@ -57,6 +69,7 @@ export default function TaskScheduleModal({ isOpen, onClose, onSave }: TaskSched
                 date={startDate}
                 setDate={setStartDate}
                 placeholder="Select start date and time"
+                minDate={new Date()}
               />
             </div>
 
@@ -69,6 +82,7 @@ export default function TaskScheduleModal({ isOpen, onClose, onSave }: TaskSched
                 date={endDate}
                 setDate={setEndDate}
                 placeholder="Select end date and time"
+                minDate={startDate || new Date()}
               />
             </div>
           </div>

@@ -14,7 +14,8 @@ export default function RubricInput({ value =  [], onChange = () =>{} }: RubricI
 
 
   const handleRubricChange = (row: number, col: number, newValue: string) => {
-    const newRubric = [...value];
+    // Deep clone to avoid mutating shared references across tasks
+    const newRubric = (Array.isArray(value) ? value : []).map((r) => Array.isArray(r) ? [...r] : []);
     if (!newRubric[row]) newRubric[row] = [];
     newRubric[row][col] = newValue;
     onChange(newRubric);

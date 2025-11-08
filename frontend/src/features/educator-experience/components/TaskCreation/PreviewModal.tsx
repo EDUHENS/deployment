@@ -184,11 +184,11 @@ export default function PreviewModal({ isOpen, onClose, taskData, onPublish }: P
                   Your work will be evaluated based on these criteria:
                 </p>
                 <div className="bg-[#e6e6e6] border border-[#e6e6e6] border-solid rounded-[4px] p-2">
-                  <div className="grid grid-cols-[repeat(5,_minmax(0px,_1fr))] grid-rows-[repeat(5,_minmax(0px,_1fr))] gap-[2px] h-[575px]">
+                  <div className="grid grid-cols-[repeat(5,_minmax(0,_1fr))] auto-rows-fr gap-[2px] max-h-[575px]">
                     {/* Header Row */}
                     {taskData.rubric[0]?.map((header, colIndex) => (
                       <div key={colIndex} className="bg-[#2d2e34] flex items-center p-4 rounded-[2px]">
-                        <p className="font-['Helvetica_Neue:Medium',sans-serif] text-[#f8f8f8] text-[12px] tracking-[0.24px] leading-[1.5]">
+                        <p className="font-['Helvetica_Neue:Medium',sans-serif] text-[#f8f8f8] text-[12px] tracking-[0.24px] leading-[1.5] break-words whitespace-pre-wrap">
                           {header || `Column ${colIndex + 1}`}
                         </p>
                       </div>
@@ -197,8 +197,8 @@ export default function PreviewModal({ isOpen, onClose, taskData, onPublish }: P
                     {/* Data Rows */}
                     {taskData.rubric.slice(1).map((row, rowIndex) => (
                       row.map((cell, colIndex) => (
-                        <div key={`${rowIndex}-${colIndex}`} className="bg-white flex items-center p-2 rounded-[2px]">
-                          <p className="font-['Helvetica_Neue:Medium',sans-serif] text-black text-[12px] tracking-[0.24px] leading-[1.5]">
+                        <div key={`${rowIndex}-${colIndex}`} className="bg-white flex items-start p-2 rounded-[2px]">
+                          <p className="font-['Helvetica_Neue:Medium',sans-serif] text-black text-[12px] tracking-[0.24px] leading-[1.5] break-words whitespace-pre-wrap">
                             {cell || '-'}
                           </p>
                         </div>

@@ -16,9 +16,10 @@ interface DateTimePickerProps {
   date: Date | undefined
   setDate: (date: Date | undefined) => void
   placeholder?: string
+  minDate?: Date | undefined
 }
 
-export function DateTimePicker({ date, setDate, placeholder = "Pick a date and time" }: DateTimePickerProps) {
+export function DateTimePicker({ date, setDate, placeholder = "Pick a date and time", minDate }: DateTimePickerProps) {
   const [isOpen, setIsOpen] = React.useState(false)
   const [hourInput, setHourInput] = React.useState("")
   const [minuteInput, setMinuteInput] = React.useState("")
@@ -94,6 +95,14 @@ export function DateTimePicker({ date, setDate, placeholder = "Pick a date and t
     }
   }
 
+  // Normalize minDate to start of day for calendar disable logic
+  const minDay = React.useMemo(() => {
+    if (!minDate) return undefined
+    const d = new Date(minDate)
+    d.setHours(0, 0, 0, 0)
+    return d
+  }, [minDate])
+
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
@@ -129,6 +138,7 @@ export function DateTimePicker({ date, setDate, placeholder = "Pick a date and t
               onSelect={handleDateSelect}
               initialFocus
               className="rounded-l-lg"
+              disabled={minDay ? { before: minDay } : undefined}
             />
           </div>
           <div className="flex flex-col gap-3 p-4 border-l-2 border-[#e6e6e6] bg-[#f8f8f8] min-w-[160px]">

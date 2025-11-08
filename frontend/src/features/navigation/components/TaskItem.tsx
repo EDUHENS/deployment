@@ -5,7 +5,7 @@ import { ChevronDown, ArrowRight, FileText } from 'lucide-react';
 
 export interface TaskItemProps {
   // CHANGED: optional id to support future DB-driven behaviors
-  id?: number;
+  id?: string | number;
   title: string;
   dueDate: number; // days until due
   isExpanded?: boolean;

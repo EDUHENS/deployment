@@ -45,7 +45,7 @@ export default function Sidebar({
   // TODO(db): When a task is selected, fetch its latest form/submission state from API.
   // - Use task.id to request GET /tasks/:id and GET /tasks/:id/form
   const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
-  const [expandedTaskIds, setExpandedTaskIds] = useState<number[]>([]);
+  const [expandedTaskIds, setExpandedTaskIds] = useState<Array<string | number>>([]);
   const [showUserModal, setShowUserModal] = useState(false);
   const [userName, setUserName] = useState(userProfile?.name || 'Dr. Sarah Johnson');
   const roleLabel = userProfile?.role ?? 'Educator';
@@ -67,7 +67,7 @@ export default function Sidebar({
   );
 
   // CHANGED: Accordion behavior — keep only one expanded at a time
-  const handleTaskToggle = (taskId: number) => {
+  const handleTaskToggle = (taskId: string | number) => {
     setExpandedTaskIds((prev) => (prev.includes(taskId) ? [] : [taskId]));
   };
 
@@ -217,7 +217,13 @@ export default function Sidebar({
           </div>
 
           <div className="flex flex-col gap-3 grow items-start min-h-0 min-w-0 overflow-x-clip overflow-y-auto w-full">
-            {filteredTasks.map((task) => (
+            {filteredTasks.length === 0 ? (
+              <p className="text-gray-400 text-sm px-2">
+                {localSearchQuery?.trim()
+                  ? `No tasks match "${localSearchQuery.trim()}"`
+                  : 'You have not published any tasks yet.'}
+              </p>
+            ) : filteredTasks.map((task) => (
               simpleTasks ? (
                 <button
                   key={task.id}
@@ -258,7 +264,26 @@ export default function Sidebar({
       </div>
 
       {/* Profile */}
-      <div className="bg-[#f8f8f8] border-t border-[#e6e6e6] flex items-center justify-between p-6 w-full">
+      <div className="bg-[#f8f8f8] border-t border-[#e6e6e6] flex flex-col gap-2 items-stretch p-6 w-full">
+        {/* Small quick links above the name */}
+        <div className="flex items-center justify-between">
+          <a
+            href="/dashboard-selection"
+            className="text-xs text-gray-500 underline hover:text-[#484de6]"
+            title="Go to Selection"
+          >
+            Go to Selection
+          </a>
+          <button
+            type="button"
+            onClick={() => onLogout?.()}
+            className="text-xs text-gray-500 underline hover:text-red-600"
+            title="Log out"
+          >
+            Log out
+          </button>
+        </div>
+
         <button
           onClick={() => setShowUserModal(true)}
           className="flex items-center gap-3 cursor-pointer hover:bg-gray-100 rounded-lg p-2 transition-colors duration-200"

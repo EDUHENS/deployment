@@ -90,79 +90,50 @@ export function createAITaskRequest(teacherInput: string): AITaskCreationRequest
 
 export async function generateAITask(teacherInput: string): Promise<AITaskCreationResponse> {
   try {
-    const request = createAITaskRequest(teacherInput);
-    
-    // TODO: Replace with actual API call to backend
-    // const response = await fetch('/api/ai/generate-task', {
-    //   method: 'POST',
-    //   headers: {
-    //     'Content-Type': 'application/json',
-    //   },
-    //   body: JSON.stringify(request),
+    console.log('[AI] generateAITask called with prompt:', teacherInput);
+    // Call backend route to generate (no persistence)
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
+    console.log('[AI] Backend URL:', BACKEND_URL);
 
-    void request;
-    // });
-    
-    // For now, simulate AI response with mock data
-    await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate API delay
-    
-    const mockResponse: AITaskCreationResponse = {
-      success: true,
-      task: {
-        title: "Understanding and Applying React Props in Component-Based Development",
-        objective: "By the end of this task, you will be able to analyze the role of props in React, design reusable components using props, and evaluate component behavior based on prop-driven information flow.",
-        instructions: [
-          "Read the provided resources on React props and component architecture.",
-          "Set up a basic React project using Create React App or Vite.",
-          "Create a parent component (e.g., App) that renders at least three child components with different prop values.",
-          "Design at least two reusable child components (e.g., UserCard, ProductItem) that accept props such as name, price, image, or status.",
-          "Implement prop validation using PropTypes or TypeScript interfaces.",
-          "Demonstrate dynamic rendering based on props (e.g., conditional styling or content).",
-          "Document your code with comments explaining how props are passed and used.",
-          "Test your components by changing prop values and observing the output.",
-          "Submit your project folder along with a short report (max 500 words) explaining your design choices and what you learned about props."
-        ],
-        expected_output: [
-          "A working React project with at least two reusable components using props",
-          "A short reflective report (PDF or Markdown)",
-          "Clear documentation and prop validation in code"
-        ],
-        duration: "Estimated time: 6–8 hours",
-        resources: [
-          "React Official Docs – Props (link)",
-          "PropTypes Documentation (link)",
-          "Vite Setup Guide or Create React App (link)"
-        ],
-        reflection_questions: [
-          "What challenges did you face when designing reusable components with props?",
-          "How do props contribute to component modularity and scalability in React?"
-        ],
-        assessment_criteria: [
-          "Relevance and completeness of components and prop usage",
-          "Depth of analysis in the report",
-          "Clarity and rigor in code structure and documentation",
-          "Originality and creativity in component design"
-        ],
-        rubric: [
-          ["Criteria", "Excellent", "Good (75–89%)", "Satisfactory (60–74%)", "Needs Improvement (< 60%)"],
-          ["Component Design & Props", "Clear, reusable, dynamic", "Mostly reusable, some dynamic", "Basic use of props", "Incomplete or incorrect use"],
-          ["Code Quality & Validation", "Clean, well-documented, validated", "Minor issues", "Some documentation", "Poor structure"],
-          ["Report & Reflection", "Insightful, well-structured", "Adequate", "Basic", "Missing or unclear"],
-          ["Creativity & Originality", "Unique, thoughtful design", "Some creativity", "Minimal effort", "Generic or copied"]
-        ],
-        level_of_task: "Introductory to Intermediate – Suitable for students with basic React knowledge",
-        support_hints: [
-          "Use props.name or destructuring (const {name} = props) to access props in child components",
-          "Try conditional rendering: props.status === 'active'",
-          "Use PropTypes to catch errors early",
-          "Refer to examples in the React docs for inspiration"
-        ],
-        academic_integrity: "Make sure your work is your own. If you use external sources or code snippets, cite them properly. Learning happens best when you build and reflect on your own solutions."
-      }
-    };
-    
-    return mockResponse;
+    // Get an access token via the Next route to authorize backend call
+    const tokenRes = await fetch('/auth/access-token', { credentials: 'include' });
+    if (!tokenRes.ok) throw new Error('Failed to obtain access token');
+    const tokenJson: any = await tokenRes.json();
+    const token: string = tokenJson.accessToken || tokenJson.token;
+    console.log('[AI] Access token present:', Boolean(token));
+    if (!token) throw new Error('No access token');
+
+    // Build the exact request shape you provided
+    const requestPayload = createAITaskRequest(teacherInput);
+    console.log('[AI] Sending requestPayload keys:', Object.keys(requestPayload || {}));
+
+    const res = await fetch(`${BACKEND_URL}/api/tasks/ai/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      // Pass the guidelines + teacher_specification exactly as required
+      body: JSON.stringify(requestPayload),
+    });
+    console.log('[AI] Backend /generate status:', res.status, res.statusText);
+    if (!res.ok) {
+      const text = await res.text();
+      console.error('[AI] Backend /generate error body:', text);
+      throw new Error(text || 'AI generation failed');
+    }
+    const data = await res.json();
+    console.log('[AI] Backend /generate payload ok?:', data?.ok);
+    if (data?.debug) {
+      console.log('[AI] Debug prompt:', data.debug.prompt);
+      console.log('[AI] Debug raw content snippet:', (data.debug.raw || '').slice(0, 200));
+    }
+    if (!data?.ok) throw new Error(data?.error || 'AI generation failed');
+    console.log('[AI] Generation task keys:', Object.keys(data.task || {}));
+    console.log('[AI] Generation task preview:', JSON.stringify(data.task, null, 2).slice(0, 1000));
+    return { success: true, task: data.task } as AITaskCreationResponse;
   } catch (error) {
+    console.error('[AI] generateAITask failed:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'An unknown error occurred'
@@ -184,22 +155,74 @@ export function convertAITaskToFormData(aiTask: AITaskCreationResponse['task']):
       rubric: [],
       levelOfTask: '',
       supportHints: [''],
-      academicIntegrity: ''
+      academicIntegrity: '',
+      gradingSystem: 'passfail'
     };
   }
 
-    return {
-      title: aiTask.title,
-      objective: aiTask.objective,
-      steps: aiTask.instructions,
-      expectedOutputs: aiTask.expected_output,
-      duration: aiTask.duration,
-      resources: aiTask.resources,
-      reflectionQuestions: aiTask.reflection_questions,
-      assessmentCriteria: aiTask.assessment_criteria,
-      rubric: aiTask.rubric,
-      levelOfTask: aiTask.level_of_task,
-      supportHints: aiTask.support_hints,
-      academicIntegrity: aiTask.academic_integrity
-    };
+    // Normalize resources: accept strings or {title, url}
+    const normalizedResources = Array.isArray(aiTask.resources)
+      ? aiTask.resources.map((r: any) => {
+          if (typeof r === 'string') return r;
+          if (r && typeof r.title === 'string' && typeof r.url === 'string') return `${r.title} - ${r.url}`;
+          return JSON.stringify(r);
+        })
+      : [];
+
+  // Normalize rubric to ensure header + rows aligned with criteria
+  const criteria = Array.isArray(aiTask.assessment_criteria) ? aiTask.assessment_criteria : [];
+  let rubric2D: string[][] = Array.isArray(aiTask.rubric) ? aiTask.rubric : [];
+  const header = ['Criteria','Excellent','Good (75–89%)','Satisfactory (60–74%)','Needs Improvement (<60%)'];
+  const is2D = Array.isArray(rubric2D) && rubric2D.every((row) => Array.isArray(row));
+  if (!is2D || rubric2D.length === 0) {
+    rubric2D = [header, ...criteria.map((c) => [c, '—', '—', '—', '—'])];
+  } else {
+    // enforce 5 columns and criterion in first cell
+    const dataRows = rubric2D.slice(1);
+    rubric2D[0] = header;
+    if (criteria.length && dataRows.length !== criteria.length) {
+      rubric2D = [header, ...criteria.map((c) => [c, '—', '—', '—', '—'])];
+    } else {
+      rubric2D = [header, ...dataRows.map((row, i) => {
+        const r = Array.isArray(row) ? row.slice(0, 5) : [];
+        while (r.length < 5) r.push('—');
+        if (criteria[i]) r[0] = criteria[i];
+        return r;
+      })];
+    }
+  }
+
+  return {
+    title: aiTask.title,
+    objective: aiTask.objective,
+    steps: aiTask.instructions,
+    expectedOutputs: aiTask.expected_output,
+    duration: aiTask.duration,
+    resources: normalizedResources,
+    reflectionQuestions: aiTask.reflection_questions,
+    assessmentCriteria: criteria,
+    rubric: rubric2D,
+    levelOfTask: aiTask.level_of_task,
+    supportHints: aiTask.support_hints,
+    academicIntegrity: aiTask.academic_integrity,
+    gradingSystem: 'passfail'
+  };
+}
+
+// Convert UI form data back to ai_task payload shape for backend
+export function convertFormDataToAiTask(form: TaskFormData) {
+  return {
+    title: form.title,
+    objective: form.objective,
+    instructions: form.steps,
+    expected_output: form.expectedOutputs,
+    duration: form.duration,
+    resources: form.resources,
+    reflection_questions: form.reflectionQuestions,
+    assessment_criteria: form.assessmentCriteria,
+    rubric: form.rubric,
+    level_of_task: form.levelOfTask,
+    support_hints: form.supportHints,
+    academic_integrity: form.academicIntegrity,
+  };
 }

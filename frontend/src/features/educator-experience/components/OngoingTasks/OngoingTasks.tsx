@@ -22,6 +22,7 @@ interface OngoingTasksProps {
   submissions: StudentSubmission[];
   taskFormData: TaskFormData;
   onTaskFormChange: (data: TaskFormData) => void;
+  formKey?: string | number; // force remount of the form when key changes
   onPublishTask: (data: TaskFormData) => void;
   onModifyTask: (message: string) => void;
   scheduledStart?: Date | null;
@@ -32,6 +33,9 @@ interface OngoingTasksProps {
   onSubmissionClick?: (submission: StudentSubmission) => void;
   educatorSubmissions?: EducatorSubmissionsMap;
   approvedGrades?: ApprovedGradesMap;
+  hideSubmissionsPanel?: boolean;
+  showTaskLink?: boolean;
+  taskLink?: string | null;
 }
 
 export default function OngoingTasks({
@@ -39,6 +43,7 @@ export default function OngoingTasks({
   submissions,
   taskFormData,
   onTaskFormChange,
+  formKey,
   onPublishTask,
   onModifyTask,
   scheduledStart,
@@ -48,7 +53,10 @@ export default function OngoingTasks({
   onTaskSchedule,
   onSubmissionClick,
   educatorSubmissions,
-  approvedGrades
+  approvedGrades,
+  hideSubmissionsPanel = false,
+  showTaskLink = false,
+  taskLink = null
 }: OngoingTasksProps) {
   const tableSubmissions = submissions.map((submission) => {
     const educatorSubmission = educatorSubmissions?.[submission.id];
@@ -183,8 +191,8 @@ export default function OngoingTasks({
     <Layout3
       header={
         <Header
-          title=""
-          subtitle="Review and Manage Task"
+          title={hideSubmissionsPanel ? 'Task Lab' : ''}
+          subtitle={hideSubmissionsPanel ? 'Create New Task' : 'Review and Manage Task'}
           taskTitle={taskTitle}
           scheduledStart={scheduledStart}
           scheduledEnd={scheduledEnd}
@@ -220,16 +228,48 @@ export default function OngoingTasks({
                 </span>
               </button>
               
-              {/* TaskLink Section */}
-              <div className="bg-white border border-[#cccccc] border-solid box-border content-stretch flex gap-[8px] items-center justify-between max-w-[200px] overflow-visible px-[16px] py-[12px] relative rounded-[4px] shrink-0 w-[200px]">
-                <span className="font-['Helvetica_Neue:Regular', sans-serif] leading-[normal] not-italic relative shrink-0 text-[#484de6] text-[14px] text-nowrap whitespace-pre underline cursor-pointer">
-                  TaskLink
-                </span>
-                <div className="flex gap-[8px] items-center">
-                  <Copy className="w-3 h-3 text-[#595959] cursor-pointer hover:text-[#333333] transition-colors" />
-                  <Share className="w-3 h-3 text-[#595959] cursor-pointer hover:text-[#333333] transition-colors" />
+              {/* TaskLink Section (hidden for drafts / when showTaskLink=false) */}
+              {showTaskLink && taskLink && (
+                <div className="bg-white border border-[#cccccc] border-solid box-border content-stretch flex gap-[8px] items-center justify-between max-w-[200px] overflow-visible px-[16px] py-[12px] relative rounded-[4px] shrink-0 w-[200px]">
+                  <a
+                    href={taskLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-['Helvetica_Neue:Regular', sans-serif] leading-[normal] not-italic relative shrink-0 text-[#484de6] text-[14px] text-nowrap whitespace-pre underline cursor-pointer"
+                    title={taskLink}
+                  >
+                    Task Link
+                  </a>
+                  <div className="flex gap-[8px] items-center">
+                    <button
+                      title="Copy link"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (navigator?.clipboard?.writeText) {
+                          navigator.clipboard.writeText(taskLink).then(() => alert('Link copied')); 
+                        } else {
+                          void (async () => { alert(taskLink); })();
+                        }
+                      }}
+                    >
+                      <Copy className="w-3 h-3 text-[#595959] cursor-pointer hover:text-[#333333] transition-colors" />
+                    </button>
+                    <button
+                      title="Share"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (navigator?.share) {
+                          navigator.share({ url: taskLink, title: 'Task Link' }).catch(() => {});
+                        } else {
+                          window.open(taskLink, '_blank');
+                        }
+                      }}
+                    >
+                      <Share className="w-3 h-3 text-[#595959] cursor-pointer hover:text-[#333333] transition-colors" />
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
             </>
           }
         />
@@ -239,6 +279,7 @@ export default function OngoingTasks({
           {/* TaskCreationForm - Takes remaining space */}
           <div className="absolute top-0 left-0 right-0 bottom-0 z-0 w-full">
             <TaskCreationForm
+              key={formKey}
               data={taskFormData}
               onChange={onTaskFormChange}
             />
@@ -254,7 +295,7 @@ export default function OngoingTasks({
           </div>
         </div>
       }
-      rightContent={
+      rightContent={ hideSubmissionsPanel ? null : (
         <div className="h-full flex flex-col bg-[#F8F8F8]">
           {/* Title Section */}
           <div className="bg-[#f8f8f8] box-border content-stretch flex flex-col gap-[4px] items-start overflow-clip pb-[24px] pt-[16px] px-[16px] relative shrink-0 w-full">
@@ -324,7 +365,7 @@ export default function OngoingTasks({
             />
           </div>
         </div>
-      }
+      )}
     />
   );
 }
