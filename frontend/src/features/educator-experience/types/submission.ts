@@ -5,6 +5,8 @@ export interface SubmissionAttachment {
   type: 'pdf' | 'github';
   name: string;
   size: string;
+  // Optional link to open (for URL/link assets)
+  href?: string;
 }
 
 export interface AIAssessment {

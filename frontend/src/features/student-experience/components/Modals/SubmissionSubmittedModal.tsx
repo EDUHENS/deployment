@@ -7,12 +7,16 @@ interface SubmissionSubmittedModalProps {
   isOpen: boolean;
   onClose: () => void;
   onViewSummary: () => void;
+  aiStatus?: 'pending' | 'pass' | 'fail' | null;
+  aiFeedback?: string | null;
 }
 
 export default function SubmissionSubmittedModal({
   isOpen,
   onClose,
   onViewSummary,
+  aiStatus = null,
+  aiFeedback = null,
 }: SubmissionSubmittedModalProps) {
   return (
     <ModalFrame
@@ -26,9 +30,22 @@ export default function SubmissionSubmittedModal({
       </div>
       <div>
         <h2 className="text-2xl font-semibold text-slate-900">Submission sent!</h2>
-        <p className="mt-2 text-sm text-slate-500">
-          We’ve shared your work with the educator. You’ll get notified once the task is reviewed.
-        </p>
+        {aiStatus == null || aiStatus === 'pending' ? (
+          <p className="mt-2 text-sm text-slate-500">
+            We’ve shared your work with the educator. Hens is grading your work now — this may take a moment.
+          </p>
+        ) : (
+          <div className="mt-2 text-left max-w-[680px]">
+            <p className="text-sm text-slate-700">
+              Hens AI assessment: <span className={aiStatus === 'pass' ? 'text-emerald-600' : 'text-red-600'}>{aiStatus.toUpperCase()}</span>
+            </p>
+            {aiFeedback && (
+              <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-[12px] text-slate-700 border border-slate-200">
+                {aiFeedback}
+              </pre>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="grid w-full gap-4 sm:grid-cols-2">

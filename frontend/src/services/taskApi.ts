@@ -106,3 +106,21 @@ export async function getTaskEnrollments(taskId: string): Promise<{ ok: boolean;
   });
   return r.json();
 }
+
+export async function getTaskSubmissions(taskId: string): Promise<{ ok: boolean; submissions: any[] }> {
+  const token = await getToken();
+  const r = await fetch(`${BACKEND_URL}/api/tasks/${taskId}/submissions`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return r.json();
+}
+
+export async function gradeSubmission(submissionId: string, payload: { educator_score?: number; educator_feedback?: string; status?: string }) {
+  const token = await getToken();
+  const r = await fetch(`${BACKEND_URL}/api/submissions/${submissionId}/grade`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
+  return r.json();
+}

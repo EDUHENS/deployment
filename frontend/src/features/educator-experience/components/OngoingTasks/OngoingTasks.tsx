@@ -36,6 +36,7 @@ interface OngoingTasksProps {
   hideSubmissionsPanel?: boolean;
   showTaskLink?: boolean;
   taskLink?: string | null;
+  modifyLoading?: boolean;
 }
 
 export default function OngoingTasks({
@@ -56,7 +57,8 @@ export default function OngoingTasks({
   approvedGrades,
   hideSubmissionsPanel = false,
   showTaskLink = false,
-  taskLink = null
+  taskLink = null,
+  modifyLoading = false
 }: OngoingTasksProps) {
   const tableSubmissions = submissions.map((submission) => {
     const educatorSubmission = educatorSubmissions?.[submission.id];
@@ -138,9 +140,11 @@ export default function OngoingTasks({
   }, [itemsPerPage]);
 
   // Calculate dynamic values
-  const totalSubmissions = submissions.length;
-  const passCount = submissions.filter(sub => sub.aiAssessment.overall === 'pass').length;
-  const failCount = totalSubmissions - passCount;
+  // Only count rows that have a definitive Hens result (not pending)
+  const graded = submissions.filter(sub => sub.aiAssessment.overall === 'pass' || sub.aiAssessment.overall === 'fail');
+  const totalSubmissions = graded.length;
+  const passCount = graded.filter(sub => sub.aiAssessment.overall === 'pass').length;
+  const failCount = graded.filter(sub => sub.aiAssessment.overall === 'fail').length;
 
   // Calculate pagination
   const totalPages = Math.ceil(tableSubmissions.length / itemsPerPage);
@@ -290,6 +294,7 @@ export default function OngoingTasks({
             <BottomInputBar
               onPublish={() => onPublishTask(taskFormData)}
               onModify={onModifyTask}
+              isLoading={modifyLoading}
               placeholder="Hens can modify it for you"
             />
           </div>

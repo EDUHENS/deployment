@@ -179,8 +179,12 @@ module.exports = (requireAuth) => {
           [id, s.section_type, s.allow_additions, s.display_order, JSON.stringify(s.content)]
         );
       }
+      // Bump task updated_at to reflect content change
+      await client.query('UPDATE tasks SET updated_at = now() WHERE id = $1', [id]);
       await client.query('COMMIT');
       console.log(`[DB] Task sections saved: "${taskTitle}" (${id})`);
+       // Prevent stale caches from hiding fresh rubric/sections
+      res.set('Cache-Control', 'no-store');
       return res.json({ ok: true });
     } catch (e) {
       await pool.query('ROLLBACK');
@@ -322,6 +326,7 @@ module.exports = (requireAuth) => {
 
       const base = process.env.APP_BASE_URL || process.env.AUTH0_BASE_URL || 'http://localhost:3000';
       const link = task.share_slug ? `${base}/t/${task.share_slug}` : null;
+      res.set('Cache-Control', 'no-store');
       return res.json({ ok: true, task: { id: task.id, status: task.status, opens_at: task.opens_at, due_at: task.due_at, link }, ai_task });
     } catch (e) {
       console.error('Get task form error:', e);
@@ -437,6 +442,67 @@ module.exports = (requireAuth) => {
     } catch (e) {
       console.error('List enrollments error:', e);
       return res.status(500).json({ ok: false, error: 'failed to list enrollments' });
+    }
+  });
+
+  // List real submissions for a task owned by current teacher
+  router.get('/:id/submissions', requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const teacherId = await getTeacherIdFromReq(req);
+      const t = await pool.query('SELECT id FROM tasks WHERE id=$1 AND teacher_id=$2', [id, teacherId]);
+      if (t.rowCount === 0) return res.status(404).json({ ok: false, error: 'task not found' });
+
+      const r = await pool.query(
+        `SELECT s.id, s.status, s.submitted_at, s.graded_at, s.ai_score, s.ai_feedback,
+                s.educator_score, s.educator_feedback, s.notes,
+                u.first_name, u.last_name, u.email, u.picture
+           FROM submissions s
+           JOIN users u ON u.id = s.student_id
+          WHERE s.task_id = $1
+          ORDER BY COALESCE(s.submitted_at, s.created_at) DESC`,
+        [id]
+      );
+
+      // Optionally, fetch assets per submission
+      const ids = r.rows.map(row => row.id);
+      let assetsBySubmission = {};
+      if (ids.length) {
+        const a = await pool.query(
+          `SELECT id, submission_id, asset_type, file_name, mime_type, file_size, url, storage_key
+             FROM submission_assets
+            WHERE submission_id = ANY($1::uuid[])`,
+          [ids]
+        );
+        for (const row of a.rows) {
+          if (!assetsBySubmission[row.submission_id]) assetsBySubmission[row.submission_id] = [];
+          assetsBySubmission[row.submission_id].push(row);
+        }
+      }
+
+      const submissions = r.rows.map((row) => ({
+        id: row.id,
+        status: row.status,
+        submitted_at: row.submitted_at,
+        graded_at: row.graded_at,
+        ai_score: row.ai_score,
+        ai_feedback: row.ai_feedback,
+        educator_score: row.educator_score,
+        educator_feedback: row.educator_feedback,
+        notes: row.notes,
+        student: {
+          first_name: row.first_name,
+          last_name: row.last_name,
+          email: row.email,
+          picture: row.picture,
+        },
+        assets: assetsBySubmission[row.id] || [],
+      }));
+
+      return res.json({ ok: true, submissions });
+    } catch (e) {
+      console.error('List submissions error:', e);
+      return res.status(500).json({ ok: false, error: 'failed to list submissions' });
     }
   });
 

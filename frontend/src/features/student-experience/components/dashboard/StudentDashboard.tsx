@@ -5,8 +5,10 @@ import { MainLayout } from '@/shared/components/layout';
 import EnrollTaskView from '../enroll/EnrollTaskView';
 import StudentTaskWorkspace from '../workspace/StudentTaskWorkspace';
 import StudentTaskSummary from '../summary/StudentTaskSummary';
-import SubmissionSavedModal from '../modals/SubmissionSavedModal';
-import SubmissionSubmittedModal from '../modals/SubmissionSubmittedModal';
+import SubmissionSavedModal from '../Modals/SubmissionSavedModal';
+import SubmissionSubmittedModal from '../Modals/SubmissionSubmittedModal';
+import StudentSubmissionSummaryModal from '../Modals/StudentSubmissionSummaryModal';
+import { getLatestSubmission } from '../../services/studentTaskService';
 import { useStudentTasks } from '../../hooks/useStudentTasks';
 import type { StudentTask } from '../../types/studentTask';
 import type { Task as SidebarTask } from '@/features/educator-experience/types';
@@ -21,11 +23,14 @@ export default function StudentDashboard({ onLogout }: StudentDashboardProps) {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showSavedModal, setShowSavedModal] = useState(false);
   const [showSubmittedModal, setShowSubmittedModal] = useState(false);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [aiModalStatus, setAiModalStatus] = useState<'pending' | 'pass' | 'fail' | null>(null);
+  const [aiModalFeedback, setAiModalFeedback] = useState<string | null>(null);
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
   const [userProfile, setUserProfile] = useState<{ name: string; avatar?: string; role?: string }>();
 
   const selectedTask: StudentTask | undefined = useMemo(
-    () => tasks.find((task) => task.id === selectedTaskId ?? undefined),
+    () => tasks.find((task) => task.id === (selectedTaskId ?? '')),
     [tasks, selectedTaskId],
   );
 
@@ -36,9 +41,11 @@ export default function StudentDashboard({ onLogout }: StudentDashboardProps) {
     }
   };
 
+  type SubmissionDraft = NonNullable<StudentTask['submission']>;
+
   const handleSaveSubmission = async (
     taskId: string,
-    payload: { files: StudentTask['submission']['files']; links: StudentTask['submission']['links']; notes: string },
+    payload: { files: SubmissionDraft['files']; links: SubmissionDraft['links']; notes: string },
   ) => {
     await saveDraft(taskId, payload);
     setShowSavedModal(true);
@@ -46,11 +53,65 @@ export default function StudentDashboard({ onLogout }: StudentDashboardProps) {
 
   const handleSubmitSubmission = async (
     taskId: string,
-    payload: { files: StudentTask['submission']['files']; links: StudentTask['submission']['links']; notes: string },
+    payload: { files: SubmissionDraft['files']; links: SubmissionDraft['links']; notes: string },
   ) => {
     await saveDraft(taskId, payload);
     await submitTask(taskId);
+    setAiModalStatus('pending');
+    setAiModalFeedback(null);
     setShowSubmittedModal(true);
+    // Best-effort: poll a few times for AI feedback
+    try {
+      for (let i = 0; i < 12; i++) { // up to ~24s
+        await new Promise(r => setTimeout(r, 2000));
+        const latest = await getLatestSubmission(taskId);
+        const aiScore = latest?.ai_score;
+        const aiFeedback = latest?.ai_feedback || null;
+        if (aiScore != null || aiFeedback) {
+          let status: 'pass' | 'fail' | 'pending' = 'pending';
+          if (aiScore === 1) status = 'pass';
+          else if (aiScore === 0) status = 'fail';
+          else if (typeof aiFeedback === 'string') {
+            try {
+              let cleaned = aiFeedback.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '');
+              const parsed = JSON.parse(cleaned);
+              const overall = (parsed?.overall || '').toString().toLowerCase();
+              if (overall === 'pass' || overall === 'fail') status = overall as any;
+            } catch {}
+          }
+          setAiModalStatus(status as any);
+          setAiModalFeedback(typeof aiFeedback === 'string' ? aiFeedback : (aiFeedback ? JSON.stringify(aiFeedback) : null));
+          break;
+        }
+      }
+    } catch {}
+  };
+
+  const openSummary = async () => {
+    try {
+      const tid = selectedTaskId;
+      if (tid) {
+        const latest = await getLatestSubmission(tid);
+        const aiScore = latest?.ai_score;
+        const aiFeedback = latest?.ai_feedback || null;
+        let status: 'pass' | 'fail' | 'pending' | null = null;
+        if (aiScore === 1) status = 'pass';
+        else if (aiScore === 0) status = 'fail';
+        else if (typeof aiFeedback === 'string') {
+          try {
+            let cleaned = aiFeedback.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '');
+            const parsed = JSON.parse(cleaned);
+            const overall = (parsed?.overall || '').toString().toLowerCase();
+            if (overall === 'pass' || overall === 'fail') status = overall as any; else status = 'pending';
+          } catch { status = 'pending'; }
+        } else {
+          status = 'pending';
+        }
+        setAiModalStatus(status);
+        setAiModalFeedback(typeof aiFeedback === 'string' ? aiFeedback : (aiFeedback ? JSON.stringify(aiFeedback) : null));
+      }
+    } catch {}
+    setShowSummaryModal(true);
   };
 
   const showSummary = selectedTask && ['graded', 'closed'].includes(selectedTask.status);
@@ -121,6 +182,7 @@ export default function StudentDashboard({ onLogout }: StudentDashboardProps) {
                   task={selectedTask}
                   onSaveSubmission={handleSaveSubmission}
                   onSubmitSubmission={handleSubmitSubmission}
+                  onShowSummary={openSummary}
                 />
               )
             ) : (
@@ -131,8 +193,9 @@ export default function StudentDashboard({ onLogout }: StudentDashboardProps) {
         isMinimized={isSidebarMinimized}
         onToggleMinimize={() => setIsSidebarMinimized(prev => !prev)}
         tasks={sidebarTasks}
-        onTaskClick={(task) => {
-          const target = tasks[task.id];
+        onTaskClick={(item) => {
+          const idx = typeof (item as any).id === 'number' ? (item as any).id : parseInt(String((item as any).id), 10);
+          const target = Number.isFinite(idx) ? tasks[idx] : undefined;
           if (target) setSelectedTaskId(target.id);
         }}
         searchQuery=""
@@ -141,6 +204,7 @@ export default function StudentDashboard({ onLogout }: StudentDashboardProps) {
         userProfile={userProfile}
         onLogout={onLogout}
         onProfileUpdated={refreshProfile}
+        audience="student"
       />
       
       <SubmissionSavedModal isOpen={showSavedModal} onClose={() => setShowSavedModal(false)} />
@@ -149,7 +213,16 @@ export default function StudentDashboard({ onLogout }: StudentDashboardProps) {
         onClose={() => setShowSubmittedModal(false)}
         onViewSummary={() => {
           setShowSubmittedModal(false);
+          openSummary();
         }}
+        aiStatus={aiModalStatus}
+        aiFeedback={aiModalFeedback || undefined as any}
+      />
+      <StudentSubmissionSummaryModal
+        isOpen={showSummaryModal}
+        onClose={() => setShowSummaryModal(false)}
+        status={aiModalStatus}
+        feedback={aiModalFeedback || null}
       />
     </>
   );

@@ -8,13 +8,15 @@ export interface BottomInputBarProps {
   onModify?: (message: string) => void;
   placeholder?: string;
   publishLabel?: string;
+  isLoading?: boolean;
 }
 
 export default function BottomInputBar({ 
   onPublish, 
   onModify, 
   placeholder = "Hens can modify it for you",
-  publishLabel = 'Publish Changes'
+  publishLabel = 'Publish Changes',
+  isLoading = false
 }: BottomInputBarProps) {
   const [inputValue, setInputValue] = useState('');
 
@@ -41,6 +43,7 @@ export default function BottomInputBar({
             placeholder={placeholder}
             className="w-full"
             maxWidth="100%"
+            disabled={isLoading}
           />
         </div>
 
@@ -48,7 +51,8 @@ export default function BottomInputBar({
         <div className="shrink-0">
           <button
             onClick={handlePublish}
-            className="bg-[#484de6] border-[#6976eb] border-[3px] border-solid box-border cursor-pointer flex gap-[7px] items-center justify-center overflow-visible px-8 py-3 relative rounded-[4px] shrink-0 w-[220px] hover:bg-[#3A3FE4] transition-colors duration-200"
+            disabled={isLoading}
+            className="bg-[#484de6] disabled:opacity-50 disabled:cursor-not-allowed border-[#6976eb] border-[3px] border-solid box-border cursor-pointer flex gap-[7px] items-center justify-center overflow-visible px-8 py-3 relative rounded-[4px] shrink-0 w-[220px] hover:bg-[#3A3FE4] transition-colors duration-200"
           >
             <div className="relative shrink-0 size-[16px]">
               <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">

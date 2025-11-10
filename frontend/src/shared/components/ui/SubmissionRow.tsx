@@ -8,7 +8,7 @@ interface SubmissionRowProps {
   educatorAssessment: string;
   educatorGradingStatus?: string; // New field for educator grading status
   dateTime: string;
-  hensAssessment: 'pass' | 'fail';
+  hensAssessment: 'pass' | 'fail' | 'pending';
   className?: string;
   onClick?: () => void;
 }

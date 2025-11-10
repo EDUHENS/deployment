@@ -7,13 +7,15 @@ export type StudentTaskStatus =
   | 'closed';
 
 export interface StudentSubmissionLink {
-  id: string;
+  id: string;            // UI id
   url: string;
+  assetId?: string;      // server asset id (for deletion)
 }
 
 export interface StudentSubmissionFile {
-  id: string;
+  id: string;            // UI id
   name: string;
+  assetId?: string;      // server asset id (for deletion)
 }
 
 export interface StudentSubmissionDraft {

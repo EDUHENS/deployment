@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CircleX, CheckCircle, FileText, Github } from 'lucide-react';
+import type { SubmissionAttachment } from '@/features/educator-experience/types/submission';
 
 // TODO(db): Wire approve and educator submission actions to backend.
 // - Persist educatorGrade/feedback
@@ -20,10 +21,13 @@ interface SubmissionDetailsModalProps {
     id: number;
     studentName: string;
     submissionDate: string;
+    status?: string;
     aiAssessment: {
-      overall: 'pass' | 'fail';
+      overall: 'pass' | 'fail' | 'pending';
       details: string[];
     };
+    attachments?: SubmissionAttachment[];
+    studentNote?: string;
   } | null;
 }
 
@@ -38,6 +42,40 @@ const SubmissionDetailsModal: React.FC<SubmissionDetailsModalProps> = ({
 }) => {
   const [educatorGrade, setEducatorGrade] = useState<'pass' | 'fail' | null>(null);
   const [educatorFeedback, setEducatorFeedback] = useState('');
+  const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL as string) || 'http://localhost:5001';
+
+  async function getToken(): Promise<string> {
+    const r = await fetch('/auth/access-token', { credentials: 'include' });
+    if (!r.ok) throw new Error('token error');
+    const j: any = await r.json();
+    return j.accessToken || j.token;
+  }
+
+  async function handleDownload(href: string, filename: string) {
+    try {
+      const isBackend = href.startsWith(BACKEND_URL);
+      if (!isBackend) {
+        window.open(href, '_blank', 'noopener');
+        return;
+      }
+      const token = await getToken();
+      const resp = await fetch(href, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) throw new Error('download failed');
+      const blob = await resp.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename || 'download';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Download error', e);
+    }
+  }
 
   // Initialize form state from existing submission
   useEffect(() => {
@@ -73,13 +111,13 @@ const SubmissionDetailsModal: React.FC<SubmissionDetailsModalProps> = ({
             <div>
               <p className="text-sm font-medium text-gray-600 mb-2">Student Name</p>
               <p className="text-lg font-semibold text-gray-900">
-                {selectedSubmission?.studentName || 'Hang Nguyen'}
+                {selectedSubmission?.studentName || 'Student'}
               </p>
             </div>
             <div>
               <p className="text-sm font-medium text-gray-600 mb-2">Submission Date/Time</p>
               <p className="text-lg font-semibold text-gray-900">
-                {selectedSubmission?.submissionDate || '2025-11-02 19:24'}
+                {selectedSubmission?.submissionDate || ''}
               </p>
             </div>
           </div>
@@ -193,70 +231,88 @@ const SubmissionDetailsModal: React.FC<SubmissionDetailsModalProps> = ({
           <div>
             <div className="flex items-center gap-3 mb-6">
               <h3 className="text-base font-semibold text-gray-900">Hens(AI) Assessment</h3>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-green-500" />
-                <span className="text-sm font-semibold text-green-600">
-                  {selectedSubmission?.aiAssessment?.overall === 'pass' ? 'Pass' : 'Fail'}
-                </span>
-              </div>
+              {selectedSubmission?.aiAssessment?.overall === 'pass' && (
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  <span className="text-sm font-semibold text-green-600">Pass</span>
+                </div>
+              )}
+              {selectedSubmission?.aiAssessment?.overall === 'fail' && (
+                <div className="flex items-center gap-2">
+                  <CircleX className="w-5 h-5 text-red-500" />
+                  <span className="text-sm font-semibold text-red-600">Fail</span>
+                </div>
+              )}
+              {selectedSubmission?.aiAssessment?.overall === 'pending' && (
+                <div className="text-sm font-semibold text-gray-600">Pending</div>
+              )}
             </div>
-            <div className="bg-green-50 border border-green-200 rounded-lg p-6 max-h-64 overflow-y-auto">
-              <ul className="space-y-2 text-sm text-gray-700">
-                <li className="flex items-start gap-2">
-                  <span className="text-green-600 font-medium">•</span>
-                  <span><strong>Component Design & Props:</strong> Excellent — clear, reusable, and dynamic component structure.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-green-600 font-medium">•</span>
-                  <span><strong>Code Quality & Validation:</strong> Good (85%) — clean and well-documented code with minor inconsistencies.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-green-600 font-medium">•</span>
-                  <span><strong>Report & Reflection:</strong> Satisfactory — adequately structured with room for deeper analysis.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-green-600 font-medium">•</span>
-                  <span><strong>Creativity & Originality:</strong> Excellent — thoughtful design choices and coherent approach.</span>
-                </li>
-              </ul>
-              <div className="mt-3 text-sm text-gray-600">
-                <strong>Overall:</strong> Demonstrates strong understanding and technical execution.
+            {selectedSubmission?.aiAssessment?.overall === 'pending' ? (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-700">
+                Learner hasn’t submitted this task yet. No AI assessment is available.
               </div>
-            </div>
+            ) : (
+              <div className={`${selectedSubmission?.aiAssessment?.overall === 'pass' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'} border rounded-lg p-6 max-h-64 overflow-y-auto`}>
+                <ul className="space-y-2 text-sm text-gray-700">
+                  {(selectedSubmission?.aiAssessment?.details || []).length > 0 ? (
+                    (selectedSubmission?.aiAssessment?.details || []).map((line, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <span className="text-gray-600 font-medium">•</span>
+                        <span>{line}</span>
+                      </li>
+                    ))
+                  ) : (
+                    <li className="flex items-start gap-2">
+                      <span className="text-gray-600 font-medium">•</span>
+                      <span>No details available.</span>
+                    </li>
+                  )}
+                </ul>
+                <div className="mt-3 text-sm text-gray-800">
+                  <strong>Overall:</strong> {selectedSubmission?.aiAssessment?.overall}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Student Note */}
           <div>
             <h3 className="text-base font-semibold text-gray-900 mb-6">Student Note</h3>
-            <div>
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 max-h-40 overflow-y-auto mb-6">
-                <p className="text-sm text-gray-700 leading-relaxed">
-                  This project was an exercise in learning how React props streamline data flow between components. I built a parent and two child components to practice reusable logic. I explained my solution with screenshots in a pdf and the code is in my GitHub, attached.
-                </p>
+            {selectedSubmission?.aiAssessment?.overall === 'pending' ? (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-sm text-gray-700">
+                Learner hasn’t submitted task yet — no note or attachments available.
               </div>
-              
-              {/* Attachments */}
-              <div className="grid grid-cols-3 gap-4">
-                {/* PDF Attachment */}
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center hover:bg-gray-100 transition-colors cursor-pointer">
-                  <FileText className="w-6 h-6 text-gray-600 mx-auto mb-3" />
-                  <p className="text-sm font-medium text-gray-700">Explanation.pdf</p>
-                  <p className="text-xs text-gray-500">1.4 MB</p>
+            ) : (
+              <div>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 max-h-40 overflow-y-auto mb-6">
+                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                    {selectedSubmission?.studentNote || '—'}
+                  </p>
                 </div>
-
-                {/* GitHub Link */}
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center hover:bg-gray-100 transition-colors cursor-pointer">
-                  <Github className="w-6 h-6 text-gray-600 mx-auto mb-3" />
-                  <p className="text-sm font-medium text-gray-700">propsexercisejames.github</p>
-                  <p className="text-xs text-gray-500">1.4 MB</p>
-                </div>
-
-                {/* Empty Slot */}
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center opacity-0 pointer-events-none">
-                  <div className="w-6 h-6 mx-auto mb-3" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {(selectedSubmission?.attachments || []).length === 0 ? (
+                    <div className="text-gray-600 text-sm">No attachments</div>
+                  ) : (
+                    (selectedSubmission?.attachments || []).map((att, idx) => {
+                      const isGithub = att.type === 'github';
+                      const icon = isGithub ? <Github className="w-6 h-6 text-gray-600 mx-auto mb-3" /> : <FileText className="w-6 h-6 text-gray-600 mx-auto mb-3" />;
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => att.href && handleDownload(att.href, att.name)}
+                          className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center hover:bg-gray-100 transition-colors"
+                        >
+                          {icon}
+                          <p className="text-sm font-medium text-gray-700 break-words">{att.name}</p>
+                          {att.size ? <p className="text-xs text-gray-500">{att.size}</p> : null}
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Action Buttons */}
@@ -272,7 +328,9 @@ const SubmissionDetailsModal: React.FC<SubmissionDetailsModalProps> = ({
                 // If educator has provided input, use that; otherwise use Hens AI assessment
                 const gradeToUse: 'pass' | 'fail' =
                   educatorGrade ??
-                  selectedSubmission?.aiAssessment?.overall ??
+                  (selectedSubmission?.aiAssessment?.overall === 'pending'
+                    ? undefined
+                    : (selectedSubmission?.aiAssessment?.overall as 'pass' | 'fail' | undefined)) ??
                   'pass';
 
                 if (educatorGrade && educatorFeedback.trim()) {

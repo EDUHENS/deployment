@@ -40,3 +40,10 @@ Thumbs.db
 # ── Misc (Vite/SSR/local overrides)
 dist-ssr/
 *.local
+
+# ── Tests
+*.test.js
+*.spec.js
+jest.*
+__tests__/
+test*.*

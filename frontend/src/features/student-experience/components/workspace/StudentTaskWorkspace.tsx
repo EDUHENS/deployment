@@ -7,6 +7,8 @@ import TaskHeader from '../shared/TaskHeader';
 import TaskSection from '../shared/TaskSection';
 import DueStatusIndicator from '../shared/DueStatusIndicator';
 import SubmissionForm from './SubmissionForm';
+import { uploadSubmissionFile, deleteSubmissionAsset, askForHints } from '@/features/student-experience/services/studentTaskService';
+import HintsModal from '../Modals/HintsModal';
 import type { StudentTask } from '@/features/student-experience/types/studentTask';
 import { getDueStatus } from '@/features/student-experience/utils/dates';
 import { RESOURCE_LINKS, REFLECTION_PROMPTS, SUPPORT_EXAMPLES } from '@/features/student-experience/constants/taskContent';
@@ -21,10 +23,13 @@ interface StudentTaskWorkspaceProps {
   task: StudentTask;
   onSaveSubmission: (taskId: string, payload: SubmissionPayload) => void;
   onSubmitSubmission: (taskId: string, payload: SubmissionPayload) => void;
+  onShowSummary?: () => void;
 }
 
-export default function StudentTaskWorkspace({ task, onSaveSubmission, onSubmitSubmission }: StudentTaskWorkspaceProps) {
+export default function StudentTaskWorkspace({ task, onSaveSubmission, onSubmitSubmission, onShowSummary }: StudentTaskWorkspaceProps) {
   const [hintPrompt, setHintPrompt] = useState('');
+  const [showHints, setShowHints] = useState(false);
+  const [hintsData, setHintsData] = useState<{ hints: string[]; next_steps?: string[]; pinpointed_issues?: string[] }>({ hints: [] });
   const submission = task.submission ?? {
     files: [],
     links: [],
@@ -34,14 +39,39 @@ export default function StudentTaskWorkspace({ task, onSaveSubmission, onSubmitS
   const dueStatus = getDueStatus(task.dueDate);
 
   const handleSave = (payload: { files: typeof submission.files; links: typeof submission.links; notes: string }) => {
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[StudentTaskWorkspace] save', { taskId: task.id, files: payload.files.length, links: payload.links.length });
+    } catch {}
     onSaveSubmission(task.id, payload);
   };
 
   const handleSubmit = (payload: { files: typeof submission.files; links: typeof submission.links; notes: string }) => {
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[StudentTaskWorkspace] submit', { taskId: task.id, files: payload.files.length, links: payload.links.length });
+    } catch {}
     onSubmitSubmission(task.id, payload);
   };
 
+  const handleUpload = async (file: File) => {
+    try {
+      await uploadSubmissionFile(task.id, file);
+    } catch (e) {
+      console.warn('Upload failed', (e as any)?.message || e);
+    }
+  };
+
+  const handleDeleteAsset = async (assetId: string) => {
+    try {
+      await deleteSubmissionAsset(task.id, assetId);
+    } catch (e) {
+      console.warn('Delete asset failed', (e as any)?.message || e);
+    }
+  };
+
   return (
+    <>
     <Layout3
       header={
         <TaskHeader
@@ -52,6 +82,16 @@ export default function StudentTaskWorkspace({ task, onSaveSubmission, onSubmitS
       }
       leftContent={
         <div className="relative flex h-full min-h-0 flex-col items-start gap-[48px] overflow-y-auto pl-[24px] pr-[16px] py-[24px]">
+          {/* Top link to open AI summary */}
+          <div className="w-full flex justify-start pl-[8px]">
+            <button
+              type="button"
+              onClick={() => onShowSummary?.()}
+              className="text-[#484de6] underline text-sm hover:text-[#3A3FE4]"
+            >
+              View AI submission summary
+            </button>
+          </div>
           <TaskSection title="Objective">
             <div className="flex w-full items-center gap-[10px] pl-[8px]">
               <p className="grow text-[16px] font-normal leading-[1.5] tracking-[0.32px] text-[#414651]">{task.objective}</p>
@@ -188,9 +228,18 @@ export default function StudentTaskWorkspace({ task, onSaveSubmission, onSubmitS
             <AIInputBox
               value={hintPrompt}
               onChange={setHintPrompt}
-              onSubmit={() => {
-                if (!hintPrompt.trim()) return;
-                setHintPrompt('');
+              onSubmit={async () => {
+                const q = hintPrompt.trim();
+                if (!q) return;
+                try {
+                  const res = await askForHints(task.id, q);
+                  setHintsData(res);
+                  setShowHints(true);
+                } catch (e) {
+                  console.warn('Hints failed', (e as any)?.message || e);
+                } finally {
+                  setHintPrompt('');
+                }
               }}
               placeholder="Hens can give you hints"
               maxWidth="530px"
@@ -205,8 +254,20 @@ export default function StudentTaskWorkspace({ task, onSaveSubmission, onSubmitS
           initialNotes={submission.notes}
           onSaveDraft={handleSave}
           onSubmitFinal={handleSubmit}
+          onUploadFile={handleUpload}
+          onDeleteAsset={handleDeleteAsset}
         />
       }
     />
+    {showHints && (
+      <HintsModal
+        isOpen={showHints}
+        onClose={() => setShowHints(false)}
+        hints={hintsData.hints}
+        nextSteps={hintsData.next_steps}
+        issues={hintsData.pinpointed_issues}
+      />
+    )}
+    </>
   );
 }

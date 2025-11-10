@@ -2,6 +2,7 @@
 
 import { ReactNode } from 'react';
 import { Sidebar } from '../../../features/navigation';
+// Use original CSS spinner (in App.css) instead of mascot face
 import type { Task } from '../../../features/educator-experience/types';
 
 export interface MainLayoutProps {
@@ -22,6 +23,10 @@ export interface MainLayoutProps {
   disableExpand?: boolean;
   onLogout?: () => void;
   onProfileUpdated?: () => void;
+  /** Explicit audience to adjust empty-state copy */
+  audience?: 'student' | 'educator';
+  /** Global loading overlay */
+  isLoading?: boolean;
 }
 
 export default function MainLayout({
@@ -38,6 +43,8 @@ export default function MainLayout({
   disableExpand = false,
   onLogout,
   onProfileUpdated,
+  audience,
+  isLoading = false,
 }: MainLayoutProps) {
   return (
     <div className="bg-[#E6E6E6] h-screen max-h-screen grid grid-cols-[auto_1fr] gap-px overflow-hidden">
@@ -55,10 +62,16 @@ export default function MainLayout({
         disableExpand={disableExpand}
         onLogout={onLogout}
         onProfileUpdated={onProfileUpdated}
+        audience={audience}
       />
 
       {/* Layout1 */}
       {mainDashboard}
+      {isLoading ? (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center pointer-events-none">
+          <div className="hens-spinner hens-spinner--lg" />
+        </div>
+      ) : null}
     </div>
   );
 }

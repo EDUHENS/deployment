@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Trash2, Sparkles, CheckCircle2, Paperclip, Clipboard, Star } from 'lucide-react';
 import type { StudentSubmissionFile, StudentSubmissionLink } from '@/features/student-experience/types/studentTask';
 import ModalFrame from '../shared/ModalFrame';
@@ -12,6 +12,8 @@ interface SubmissionFormProps {
   initialNotes?: string;
   onSaveDraft?: (payload: { files: StudentSubmissionFile[]; links: StudentSubmissionLink[]; notes: string }) => void;
   onSubmitFinal?: (payload: { files: StudentSubmissionFile[]; links: StudentSubmissionLink[]; notes: string }) => void;
+  onUploadFile?: (file: File) => Promise<void> | void;
+  onDeleteAsset?: (assetId: string) => Promise<void> | void;
 }
 
 export default function SubmissionForm({
@@ -20,6 +22,8 @@ export default function SubmissionForm({
   initialNotes = '',
   onSaveDraft,
   onSubmitFinal,
+  onUploadFile,
+  onDeleteAsset,
 }: SubmissionFormProps) {
   // Initialize with one default field each if arrays are empty
   const [files, setFiles] = useState<StudentSubmissionFile[]>(
@@ -34,6 +38,13 @@ export default function SubmissionForm({
   const hasContent = (arr: any[], key: string) => Array.isArray(arr) && arr.some((x) => (x?.[key] || '').trim());
   const canAssess = hasContent(files, 'name') || hasContent(links, 'url') || (notes || '').trim().length > 0;
 
+  // Sync local state when props change (e.g., after refresh and async load)
+  useEffect(() => {
+    setFiles(initialFiles.length > 0 ? initialFiles : [{ id: crypto.randomUUID(), name: '' }]);
+    setLinks(initialLinks.length > 0 ? initialLinks : [{ id: crypto.randomUUID(), url: '' }]);
+    setNotes(initialNotes);
+  }, [initialFiles, initialLinks, initialNotes]);
+
   const handleAddFile = () => {
     setFiles([...files, { id: crypto.randomUUID(), name: '' }]);
   };
@@ -45,6 +56,10 @@ export default function SubmissionForm({
   const handleRemoveFile = (id: string) => {
     // Keep at least one field
     if (files.length > 1) {
+      const target = files.find((f) => f.id === id);
+      if (target?.assetId) {
+        try { onDeleteAsset?.(target.assetId); } catch {}
+      }
       setFiles(files.filter((file) => file.id !== id));
     }
   };
@@ -60,6 +75,10 @@ export default function SubmissionForm({
   const handleRemoveLink = (id: string) => {
     // Keep at least one field
     if (links.length > 1) {
+      const target = links.find((l) => l.id === id);
+      if (target?.assetId) {
+        try { onDeleteAsset?.(target.assetId); } catch {}
+      }
       setLinks(links.filter((link) => link.id !== id));
     }
   };
@@ -79,6 +98,11 @@ export default function SubmissionForm({
 
   const handleSaveFromHensModal = () => {
     onSaveDraft?.({ files: files.filter((file) => file.name), links: links.filter((link) => link.url), notes });
+    setShowHensModal(false);
+  };
+
+  const handleSubmitNowFromHens = () => {
+    onSubmitFinal?.({ files: files.filter((file) => file.name), links: links.filter((link) => link.url), notes });
     setShowHensModal(false);
   };
 
@@ -108,6 +132,7 @@ export default function SubmissionForm({
                 Upload File
               </p>
             </div>
+            <p className="text-xs text-gray-500 pl-[8px] -mt-2">Accepted up to 25 MB per file. Prefer PDFs, images, or zipped sources.</p>
             <div className="flex flex-col gap-[4px] w-full">
               {files.map((file) => (
                 <div key={file.id} className="flex gap-[56px] w-full">
@@ -120,7 +145,23 @@ export default function SubmissionForm({
                         className="flex-1 bg-transparent font-normal text-[#535862] text-[14px] leading-normal tracking-[0.28px] outline-none placeholder:text-[#535862]"
                         placeholder="Attach file"
                       />
-                      <Paperclip className="size-5 text-[#535862]" />
+                      <label className="inline-flex items-center cursor-pointer">
+                        <input
+                          type="file"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const f = e.target.files?.[0];
+                            if (!f) return;
+                            try {
+                              handleUpdateFile(file.id, f.name);
+                              await onUploadFile?.(f);
+                            } finally {
+                              try { e.target.value = ''; } catch {}
+                            }
+                          }}
+                        />
+                        <Paperclip className="size-5 text-[#535862] hover:text-[#484de6]" />
+                      </label>
                     </div>
                     <button
                       type="button"
@@ -151,6 +192,9 @@ export default function SubmissionForm({
               <p className="grow font-medium text-[#414651] text-[16px] leading-normal tracking-[0.32px]">
                 Add link
               </p>
+            </div>
+            <div className="pl-[8px] pr-[8px]">
+              <p className="text-xs text-gray-500">Provide a public GitHub repo URL and (optionally) a commit SHA/tag. If your repo is private, make it public for grading or include a token in the link. You may also add a YouTube video URL for demo.</p>
             </div>
             <div className="flex flex-col gap-[8px] w-full">
               {links.map((link) => (
@@ -212,8 +256,7 @@ export default function SubmissionForm({
           <button
             type="button"
             onClick={handleHensAssessment}
-            disabled={!canAssess}
-            className={`flex-1 border-2 rounded-[4px] flex gap-[7px] items-center justify-center px-[32px] py-[16px] ${canAssess ? 'bg-[#f5f8ff] border-[#c7d7fe] hover:bg-[#eef2ff] cursor-pointer' : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'}`}
+            className={`flex-1 border-2 rounded-[4px] flex gap-[7px] items-center justify-center px-[32px] py-[16px] ${canAssess ? 'bg-[#f5f8ff] border-[#c7d7fe] hover:bg-[#eef2ff] cursor-pointer' : 'bg-gray-100 border-gray-200 text-gray-400'}`}
           >
             <Sparkles className="size-[14px] text-[#484de6]" />
             <p className="font-normal text-[16px] leading-[1.5] tracking-[0.32px]">
@@ -241,69 +284,30 @@ export default function SubmissionForm({
         contentClassName="flex flex-col items-center gap-[24px] px-[48px] py-[40px]"
         closeButtonClassName="absolute right-[16px] top-[16px] text-gray-400 transition-colors hover:text-gray-600 [&>svg]:h-6 [&>svg]:w-6"
       >
-        <div className="flex w-full max-w-[800px] flex-col items-center gap-[40px]">
-          <div className="flex flex-col items-center gap-[32px]">
-            <HappyHensMascot />
-            <div className="flex w-full flex-col items-center gap-[24px]">
-              <p className="w-full max-w-[600px] text-center text-[24px] font-bold italic tracking-[0.48px] text-[#484de6]">
-                Task Passed, Great work!
-              </p>
-            </div>
-          </div>
-
-          <div className="flex w-full flex-col gap-[32px]">
-            <div className="flex w-full flex-col gap-[24px]">
-              <p className="text-[16px] font-bold tracking-[0.32px] text-[#039855]">What went well</p>
-              <div className="flex w-full flex-col gap-[8px]">
-                <ul className="list-disc space-y-2 pl-[24px] text-[16px] tracking-[0.32px] text-[#414651]">
-                  <li className="leading-[25.888px]">
-                    <span className="font-medium text-[#181d27]">Component Design & Props:</span> Excellent — clear, reusable,
-                    and dynamic component structure. Props were applied correctly and efficiently across all components.
-                  </li>
-                  <li className="leading-[25.9px]">
-                    <span className="font-medium text-[#181d27]">Code Quality & Validation:</span> Good (85%) — clean and mostly
-                    well-documented code with minor inconsistencies in PropTypes usage. Consider adding type validation for nested props.
-                  </li>
-                  <li className="leading-[25.9px]">
-                    <span className="font-medium text-[#181d27]">Report & Reflection:</span> Satisfactory — the report is adequately structured, though deeper analysis on design decision-making could strengthen the reflection.
-                  </li>
-                  <li className="leading-[25.9px]">
-                    <span className="font-medium text-[#181d27]">Creativity & Originality:</span> Excellent — the project shows thoughtful design choices, with a unique and coherent approach to component layout and naming conventions.
-                  </li>
-                </ul>
-                <div className="pl-[24px]">
-                  <p className="text-[16px] leading-[25.9px] tracking-[0.32px] text-[#414651]">
-                    Overall, the submission demonstrates strong understanding and technical execution with minor areas for improvement in validation and documentation depth.
-                  </p>
-                </div>
+        <div className="flex w-full max-w-[800px] flex-col items-center gap-[24px]">
+          {canAssess ? (
+            <>
+              <HappyHensMascot />
+              <p className="text-center text-[18px] text-[#414651]">This is a quick preview. Submit to get an actual AI assessment.</p>
+              <div className="flex w-full gap-[8px] justify-center">
+                <button onClick={() => setShowHensModal(false)} className="px-4 py-2 rounded border">Back</button>
+                <button onClick={handleSaveFromHensModal} className="px-4 py-2 rounded border">Save Draft</button>
+                <button onClick={handleSubmitNowFromHens} className="px-4 py-2 rounded bg-[#444ce7] text-white">Submit Now</button>
+              </div>
+            </>
+          ) : (
+            <div className="w-full">
+              <h3 className="text-lg font-semibold mb-2">Before assessment, please provide:</h3>
+              <ul className="list-disc pl-6 space-y-1 text-sm text-[#414651]">
+                <li>At least one link (GitHub repo/raw file, Google Docs, YouTube demo) or upload a file.</li>
+                <li>For GitHub code: prefer raw links or include commit SHA. Example raw: https://raw.githubusercontent.com/&lt;user&gt;/&lt;repo&gt;/&lt;sha&gt;/path/file</li>
+                <li>For a repo root link, include README and key files as raw links so Hens can read them.</li>
+              </ul>
+              <div className="mt-4 text-right">
+                <button onClick={() => setShowHensModal(false)} className="px-4 py-2 rounded border">Got it</button>
               </div>
             </div>
-
-            <div className="flex w-full flex-col gap-[24px]">
-              <p className="text-[16px] font-bold tracking-[0.32px] text-[#dc6803]">What could be improved?</p>
-              <ul className="list-disc pl-[24px] text-[16px] tracking-[0.32px] text-[#181d27]">
-                <li className="leading-[25.888px]">
-                  Component Design & Props: While the component structure is clear and reusable, there are opportunities for improvement. Consider enhancing the documentation for props to make it easier for others to understand their purpose and usage. Additionally, ensure that prop types are consistently validated to prevent potential runtime errors.
-                </li>
-              </ul>
-            </div>
-
-            <div className="flex w-full gap-[8px]">
-              <button
-                onClick={() => setShowHensModal(false)}
-                className="flex w-[396px] items-center justify-center rounded-[4px] border border-[#e9eaeb] bg-[#fdfdfd] py-[16px] transition-colors hover:bg-white"
-              >
-                <p className="text-[16px] tracking-[0.32px] text-[#414651]">Back to editing</p>
-              </button>
-              <button
-                onClick={handleSaveFromHensModal}
-                className="flex w-[396px] items-center justify-center gap-[8px] rounded-[4px] bg-[#444ce7] py-[16px] transition-colors hover:bg-[#3A3FE4]"
-              >
-                <p className="text-[16px] tracking-[0.32px] text-white">Save Submission</p>
-                <CheckCircle2 className="size-4 text-white" />
-              </button>
-            </div>
-          </div>
+          )}
         </div>
       </ModalFrame>
 

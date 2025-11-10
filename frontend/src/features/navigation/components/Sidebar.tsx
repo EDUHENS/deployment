@@ -20,6 +20,8 @@ export interface SidebarProps {
     avatar?: string;
     role?: string;
   };
+  /** Explicit audience to adjust empty-state copy */
+  audience?: 'student' | 'educator';
   /** When true, render tasks as simple rows (status dot + title) without expanders */
   simpleTasks?: boolean;
   /** When true, render TaskItem but keep it collapsed (no expansion), clicking row triggers onTaskClick */
@@ -37,6 +39,7 @@ export default function Sidebar({
   onSearchChange,
   onLogoClick,
   userProfile,
+  audience,
   simpleTasks = false,
   disableExpand = false,
   onLogout,
@@ -221,7 +224,9 @@ export default function Sidebar({
               <p className="text-gray-400 text-sm px-2">
                 {localSearchQuery?.trim()
                   ? `No tasks match "${localSearchQuery.trim()}"`
-                  : 'You have not published any tasks yet.'}
+                  : ((audience || roleLabel?.toLowerCase()) === 'student'
+                      ? 'You are not enrolled in any tasks yet.'
+                      : 'You have not published any tasks yet.')}
               </p>
             ) : filteredTasks.map((task) => (
               simpleTasks ? (

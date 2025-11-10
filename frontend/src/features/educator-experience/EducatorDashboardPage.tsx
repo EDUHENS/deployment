@@ -12,21 +12,27 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { MainLayout, Layout1 } from '@/shared/components/layout'; // CHANGED
 import { AInputBox } from '@/shared/components/forms'; // CHANGED
+import ModifyPreviewModal from '@/features/educator-experience/components/TaskCreation/ModifyPreviewModal';
 import type { Task, TaskFormData, StudentSubmission, EducatorSubmissionsMap, ApprovedGradesMap } from './types'; // CHANGED
 import { mockTasks, defaultTaskFormData } from '@/mocks/data/tasks'; // CHANGED: Use existing project mock tasks
+import { buildMockSubmissions } from '@/mocks/data/submissions';
 import { fetchDashboardBootstrap } from '@/services/api/educatorDashboard'; // CHANGED
 import { OngoingTasks } from './components'; // CHANGED
 import PreviewModal from '@/features/educator-experience/components/TaskCreation/PreviewModal';
+import PublishConfirmModal from '@/features/educator-experience/components/TaskCreation/PublishConfirmModal';
+import SubmissionDetailsModal from '@/features/educator-experience/components/SubmissionDetails/SubmissionDetailsModal';
 import TaskScheduleModal from '@/features/educator-experience/components/TaskCreation/TaskScheduleModal';
 import { getMe } from '@/services/authApi';
 import { generateAITask, convertAITaskToFormData, convertFormDataToAiTask } from '@/services/aiTaskCreation';
-import { createDraft, replaceSections, updateTaskMain, publishTask, listTasks, TaskListItem, getTaskForm, getTaskEnrollments } from '@/services/taskApi';
+import { createDraft, replaceSections, updateTaskMain, publishTask, listTasks, TaskListItem, getTaskForm, getTaskEnrollments, getTaskSubmissions } from '@/services/taskApi';
+import SimpleToast from '@/shared/components/ui/SimpleToast';
 
 export default function EducatorDashboard() {
   // CHANGED: Sidebar/UI state, mirrors App.tsx usage
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [taskInput, setTaskInput] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
   const [showingLayout3, setShowingLayout3] = useState(false); // CHANGED: toggle review/manage view
   const [selectedTask, setSelectedTask] = useState<Task | null>(null); // CHANGED
 
@@ -41,6 +47,8 @@ export default function EducatorDashboard() {
   const [scheduledStart, setScheduledStart] = useState<Date | null>(null);
   const [scheduledEnd, setScheduledEnd] = useState<Date | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [showSubmissionModal, setShowSubmissionModal] = useState(false);
+  const [selectedSubmissionModal, setSelectedSubmissionModal] = useState<StudentSubmission | null>(null);
   // DB task id (UUID) for updates/publish; never use placeholder UI id
   const [dbTaskId, setDbTaskId] = useState<string | null>(null);
   // Confirm modal for publishing without due date
@@ -49,6 +57,23 @@ export default function EducatorDashboard() {
   const [showTaskLink, setShowTaskLink] = useState(false);
   // Current task share link (if published)
   const [taskLink, setTaskLink] = useState<string | null>(null);
+  const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL as string) || 'http://localhost:5001';
+  const [toast, setToast] = useState<{ message: string; kind?: 'info' | 'success' | 'error' } | null>(null);
+  const [isModifying, setIsModifying] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  const [pendingAccessCode, setPendingAccessCode] = useState<string>('');
+  const [showModifyPreview, setShowModifyPreview] = useState(false);
+  const [previewMode, setPreviewMode] = useState<'append'|'reorder'|'replace'>('append');
+  const [previewBeforeSteps, setPreviewBeforeSteps] = useState<string[]>([]);
+  const [previewAfterSteps, setPreviewAfterSteps] = useState<string[]>([]);
+  const [previewAddedSteps, setPreviewAddedSteps] = useState<string[]>([]);
+
+  // Helper: only this demo task should use mock student data
+  // Demo mock slugs: tasks whose students should always come from mock data
+  const DEMO_MOCK_SLUGS = new Set<string>(['f6a6a5066514']);
+  const isDemoMockTask = (t: { title?: string } | null) =>
+    !!t?.title && t.title.toLowerCase().includes('building restful apis');
 
   // CHANGED: Merge policy — only show mock tasks when explicitly enabled
   const [dbSidebarTasks, setDbSidebarTasks] = useState<Task[]>([]);
@@ -57,6 +82,70 @@ export default function EducatorDashboard() {
   const allTasks = useMemo(() => {
     return [...dbSidebarTasks, ...tasks];
   }, [dbSidebarTasks, tasks]);
+
+  function parseAiFeedbackRaw(raw: any): { overall?: 'pass' | 'fail'; summary?: string; criteria?: Array<any>; details: string[] } {
+    const details: string[] = [];
+    if (!raw) return { details };
+    try {
+      if (typeof raw === 'object') {
+        const j = raw;
+        const overall = typeof j.overall === 'string' ? (j.overall.toLowerCase() as any) : undefined;
+        const summary = typeof j.summary === 'string' ? j.summary : undefined;
+        const criteria = Array.isArray(j.criteria) ? j.criteria : undefined;
+        if (summary) details.push(summary);
+        if (criteria) {
+          for (const c of criteria) {
+            const name = c?.name || 'Criterion';
+            const level = c?.level || '';
+            const comment = c?.comment || '';
+            const improvement = c?.improvement || '';
+            const segs = [`${name}: ${level}`];
+            if (comment) segs.push(comment);
+            if (improvement) segs.push(`Improvement: ${improvement}`);
+            details.push(segs.join(' — '));
+          }
+        }
+        return { overall, summary, criteria, details };
+      }
+
+      let txt = String(raw);
+      // Try to extract the first fenced JSON block anywhere in the text
+      const fence = txt.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+      if (fence && fence[1]) {
+        txt = fence[1];
+      }
+      txt = txt.trim();
+      // If still not fenced, but looks like JSON, parse it
+      if (!fence && !/^[\[{]/.test(txt)) {
+        // try to find first { ... last }
+        const first = txt.indexOf('{');
+        const last = txt.lastIndexOf('}');
+        if (first >= 0 && last > first) txt = txt.slice(first, last + 1);
+      }
+      const j = JSON.parse(txt);
+      const overall = typeof j.overall === 'string' ? (j.overall.toLowerCase() as any) : undefined;
+      const summary = typeof j.summary === 'string' ? j.summary : undefined;
+      const criteria = Array.isArray(j.criteria) ? j.criteria : undefined;
+      if (summary) details.push(summary);
+      if (criteria) {
+        for (const c of criteria) {
+          const name = c?.name || 'Criterion';
+          const level = c?.level || '';
+          const comment = c?.comment || '';
+          const improvement = c?.improvement || '';
+          const segs = [`${name}: ${level}`];
+          if (comment) segs.push(comment);
+          if (improvement) segs.push(`Improvement: ${improvement}`);
+          details.push(segs.join(' — '));
+        }
+      }
+      return { overall, summary, criteria, details };
+    } catch (e) {
+      const s = String(raw || '').replace(/```/g, '').slice(0, 500);
+      if (s) details.push(s);
+      return { details };
+    }
+  }
 
   // CHANGED: Clicking a task -> enter OngoingTasks (can extend for ClosedTaskReview later)
   const handleTaskClick = async (task: Task) => {
@@ -82,18 +171,76 @@ export default function EducatorDashboard() {
             const days = Math.max(0, Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
             setSelectedTask((prev) => prev ? { ...prev, dueDate: days } : prev);
           }
-          // Do not treat enrollments as submissions. Keep submissions empty
-          // until students actually submit work via the submissions API.
-          try {
-            const keepMock = (task.title || '').toLowerCase().includes('building restful apis with node.js');
-            if (!keepMock) {
-              const enr = await getTaskEnrollments(task.id as any);
-              if (enr?.ok) {
-                setSubmissions([]);
-              }
+          // If this DB task matches a demo slug or title, use mock students; otherwise load enrollments
+          const slug = r?.task?.share_slug as string | undefined;
+          const dbTitle = (r?.task?.task_title || task.title || '').toString();
+          const useMock = (slug && DEMO_MOCK_SLUGS.has(slug)) || isDemoMockTask({ title: dbTitle });
+          if (useMock) {
+            try {
+              const demoSubs = buildMockSubmissions();
+              setSubmissions(demoSubs);
+            } catch {
+              setSubmissions([]);
             }
-          } catch (err) {
-            console.warn('Failed to query enrollments (ignored)', err);
+          } else {
+            try {
+              // Prefer real submissions if any; otherwise fall back to enrollments-as-pending
+              const sub = await getTaskSubmissions(task.id as any);
+              if (sub?.ok && Array.isArray(sub.submissions) && sub.submissions.length > 0) {
+                const mapped = sub.submissions.map((s: any, idx: number) => {
+                  const studentName = [s.student?.first_name, s.student?.last_name].filter(Boolean).join(' ') || (s.student?.email || 'Student');
+                  const parsed = parseAiFeedbackRaw(s.ai_feedback);
+                  const aiOverall = typeof s.ai_score === 'number' ? (s.ai_score >= 1 ? 'pass' : 'fail') : (parsed.overall || 'pending');
+                  const details = parsed.details;
+                  const attachments = (Array.isArray(s.assets) ? s.assets : []).map((a: any) => {
+                    const rawUrl = (a.url || '').toString().trim();
+                    const hasScheme = /^https?:\/\//i.test(rawUrl);
+                    let href: string | undefined = undefined;
+                    if (rawUrl) {
+                      href = hasScheme ? rawUrl : `https://${rawUrl}`;
+                    } else if (a.storage_key && a.id && s.id) {
+                      href = `${BACKEND_URL}/api/submissions/${s.id}/assets/${a.id}/download`;
+                    }
+                    const lower = (href || '').toLowerCase();
+                    return {
+                      type: lower.includes('github.com') ? 'github' : 'pdf',
+                      name: a.file_name || rawUrl || 'attachment',
+                      size: '',
+                      href,
+                    };
+                  });
+                  return {
+                    id: idx + 1,
+                    studentName,
+                    submissionDate: new Date(s.submitted_at || s.graded_at || Date.now()).toISOString(),
+                    status: (s.status || 'pending') as any,
+                    aiAssessment: { overall: aiOverall as any, details },
+                    attachments,
+                    studentNote: String(s.notes || '')
+                  } as StudentSubmission;
+                });
+                setSubmissions(mapped);
+              } else {
+                const enr = await getTaskEnrollments(task.id as any);
+                if (enr?.ok && Array.isArray(enr.enrollments)) {
+                  const mapped = enr.enrollments.map((e, idx) => ({
+                    id: idx + 1,
+                    studentName: [e.first_name, e.last_name].filter(Boolean).join(' ') || (e.email || 'Student'),
+                    submissionDate: new Date(e.enrolled_at).toISOString(),
+                    status: 'pending' as const,
+                    aiAssessment: { overall: 'pending' as any, details: [] },
+                    attachments: [],
+                    studentNote: ''
+                  }));
+                  setSubmissions(mapped);
+                } else {
+                  setSubmissions([]);
+                }
+              }
+            } catch (err) {
+              console.warn('Failed to load submissions/enrollments for task', err);
+              setSubmissions([]);
+            }
           }
         }
       } else {
@@ -101,6 +248,17 @@ export default function EducatorDashboard() {
         setDbTaskId(null);
         setShowTaskLink(false);
         setTaskLink(null);
+        // Only the specific demo task should use mock students
+        if (isDemoMockTask(task)) {
+          try {
+            const demoSubs = buildMockSubmissions();
+            setSubmissions(demoSubs);
+          } catch {
+            setSubmissions([]);
+          }
+        } else {
+          setSubmissions([]);
+        }
       }
     } catch (e) {
       console.error('Failed to load task form', e);
@@ -111,6 +269,7 @@ export default function EducatorDashboard() {
     console.log('[EducatorDashboard] handlePromptSubmit prompt:', prompt);
     if (!prompt) { console.warn('[EducatorDashboard] Empty prompt; abort'); return; }
     try {
+      setIsGenerating(true);
       const ai = await generateAITask(prompt);
       console.log('[EducatorDashboard] AI response success?:', ai.success, 'has task?:', Boolean(ai.task), 'error:', ai.error);
       if (ai.success && ai.task) {
@@ -140,6 +299,8 @@ export default function EducatorDashboard() {
       }
     } catch (e) {
       console.error('AI generation error', e);
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -258,8 +419,9 @@ export default function EducatorDashboard() {
   };
 
   // Core publish flow reused by modal
-  const publishNow = async () => {
+const publishNow = async () => {
     try {
+      setIsPublishing(true);
       // Prefer persisted DB UUID
       let taskId = dbTaskId;
       const ai_task = convertFormDataToAiTask(taskFormData);
@@ -269,6 +431,8 @@ export default function EducatorDashboard() {
           ai_task,
           opens_at: scheduledStart ? new Date(scheduledStart).toISOString() : null,
           due_at: scheduledEnd ? new Date(scheduledEnd).toISOString() : null,
+          study_link: null,
+          access_code: (pendingAccessCode || '').trim() || null,
         });
         if (created?.ok && created.task_id) {
           taskId = created.task_id as string;
@@ -287,13 +451,14 @@ export default function EducatorDashboard() {
           academic_integrity: taskFormData.academicIntegrity,
           opens_at: scheduledStart ? new Date(scheduledStart).toISOString() : null,
           due_at: scheduledEnd ? new Date(scheduledEnd).toISOString() : null,
+          access_code: (pendingAccessCode || '').trim() || null,
         });
         await replaceSections(taskId, ai_task);
       }
       if (taskId) {
         const pub = await publishTask(taskId);
         console.log('[Publish] link:', pub?.link);
-        alert(pub?.link ? `Published link: ${pub.link}` : 'Published');
+        setToast({ message: pub?.link ? `Published link: ${pub.link}` : 'Published', kind: 'success' });
         setShowTaskLink(Boolean(pub?.link));
         setTaskLink(pub?.link || null);
         // mark selected task as non-draft and update due indicator
@@ -302,6 +467,8 @@ export default function EducatorDashboard() {
       }
     } catch (e) {
       console.error('Publish error', e);
+    } finally {
+      setIsPublishing(false);
     }
   };
 
@@ -314,15 +481,131 @@ export default function EducatorDashboard() {
         taskFormData={taskFormData}
         onTaskFormChange={setTaskFormData}
         formKey={formKey}
+        modifyLoading={isModifying}
         onPublishTask={async (_data) => {
-          // If no due date selected, confirm with teacher
-          if (!scheduledEnd) {
-            setShowNoDueDateModal(true);
-            return;
-          }
-          await publishNow();
+          // Always use unified publish modal; it can handle Open task vs Scheduled
+          setShowPublishModal(true);
         }}
-        onModifyTask={(_msg) => {}}
+        onModifyTask={async (message: string) => {
+          try {
+            setIsModifying(true);
+            const spec = (message || '').trim();
+            if (!spec) return;
+            // Compose spec with current task context to keep the same theme
+            const prev = taskFormData; // capture current form before building context
+            const contextSpec = [
+              'Task context (do not change title or objective):',
+              `Title: ${prev.title || ''}`,
+              `Objective: ${prev.objective || ''}`,
+              'Current instructions:',
+              (Array.isArray(prev.steps) && prev.steps.length)
+                ? prev.steps.map((s, i) => `${i + 1}. ${s}`).join('\n')
+                : '(none)',
+              '',
+              'Teacher request:',
+              spec,
+              '',
+              'Return the same JSON schema. Keep title/objective unchanged. For instructions, propose additions that fit the context.'
+            ].join('\n');
+            const res: any = await generateAITask(contextSpec);
+            if (!res || !res.task) {
+              setToast({ message: 'No changes returned by Hens', kind: 'info' });
+              return;
+            }
+
+            // Convert AI → form shape, then selectively apply ONLY section fields.
+            const aiForm = convertAITaskToFormData(res.task);
+            const next = { ...prev } as typeof taskFormData;
+
+            const changed: string[] = [];
+            const apply = <K extends keyof typeof next>(key: K, label: string, value: any) => {
+              const before = JSON.stringify((prev as any)[key] ?? null);
+              const after = JSON.stringify(value ?? null);
+              if (before !== after) {
+                (next as any)[key] = value;
+                changed.push(label);
+              }
+            };
+
+            // Sections we allow Hens to update automatically
+            // For steps, append AI-proposed steps after existing list (smart de-dup, capped additions)
+            {
+              const aiStepsRaw = (aiForm as any).steps ?? (aiForm as any).instructions ?? [];
+              const aiSteps = Array.isArray(aiStepsRaw) ? aiStepsRaw.map((s: any) => String(s || '').trim()).filter(Boolean) : [];
+              const prevSteps = Array.isArray((prev as any).steps) ? (prev as any).steps.slice() : [];
+              const normalize = (s: string) => s
+                .toLowerCase()
+                .replace(/^\s*[\divx]+[\)\].:\-]\s*/i, '')  // strip leading numbering like "1.", "a)", etc.
+                .replace(/[\s\.;,!]+$/g, '')                  // trim trailing punctuation/spaces
+                .replace(/\s+/g, ' ')                          // collapse spaces
+                .trim();
+              const existing = new Set(prevSteps.map((s: any) => normalize(String(s))));
+              const toAdd: string[] = [];
+              const addedNorm = new Set<string>();
+              const MAX_ADD = 3;
+              for (const s of aiSteps) {
+                if (toAdd.length >= MAX_ADD) break;
+                const key = normalize(s);
+                if (!key) continue;
+                if (!existing.has(key) && !addedNorm.has(key)) {
+                  addedNorm.add(key);
+                  toAdd.push(s);
+                }
+              }
+              const merged = prevSteps.concat(toAdd);
+              apply('steps' as any, `Instructions${toAdd.length ? ` (+${toAdd.length})` : ''}`, merged);
+              if (toAdd.length) {
+                changed.push(`New steps: ${toAdd.map((s) => `"${s}"`).join('; ')}`);
+              }
+            }
+            apply('expectedOutputs' as any, 'Expected Output', (aiForm as any).expectedOutputs ?? (aiForm as any).expected_output ?? []);
+            // Resources: append new items (URL-aware de-dup), cap additions
+            {
+              const aiRaw = (aiForm as any).resources ?? [];
+              const aiItems = Array.isArray(aiRaw) ? aiRaw.map((s: any) => String(s || '').trim()).filter(Boolean) : [];
+              const prevItems = Array.isArray((prev as any).resources) ? (prev as any).resources.slice() : [];
+              const norm = (s: string) => {
+                const url = (s.match(/https?:\/\/\S+/i) || [])[0] || '';
+                const key = (url ? url : s).toLowerCase().replace(/[\s\.;,!]+$/g, '').trim();
+                return key;
+              };
+              const existing = new Set(prevItems.map((s: any) => norm(String(s))));
+              const toAdd: string[] = [];
+              const added = new Set<string>();
+              const MAX_ADD = 3;
+              for (const s of aiItems) {
+                if (toAdd.length >= MAX_ADD) break;
+                const key = norm(s);
+                if (!key) continue;
+                if (!existing.has(key) && !added.has(key)) {
+                  added.add(key);
+                  toAdd.push(s);
+                }
+              }
+              const merged = prevItems.concat(toAdd);
+              apply('resources' as any, `Resources${toAdd.length ? ` (+${toAdd.length})` : ''}`, merged);
+              if (toAdd.length) changed.push(`New resources: ${toAdd.map((s) => `"${s}"`).join('; ')}`);
+            }
+            apply('reflectionQuestions' as any, 'Reflection', (aiForm as any).reflectionQuestions ?? []);
+            apply('assessmentCriteria' as any, 'Assessment Criteria', (aiForm as any).assessmentCriteria ?? []);
+            apply('rubric' as any, 'Rubric', (aiForm as any).rubric ?? []);
+            apply('supportHints' as any, 'Support & Hints', (aiForm as any).supportHints ?? []);
+
+            // DO NOT update title/objective (and other header fields) unless explicitly requested.
+            // next.title = prev.title; next.objective = prev.objective; // implicitly preserved by spreading prev
+
+            setTaskFormData(next);
+            const msg = changed.length
+              ? `Updated: ${changed.join(', ')} (title/objective unchanged)`
+              : 'No section changed (title/objective unchanged)';
+            setToast({ message: msg, kind: 'success' });
+          } catch (e) {
+            console.error('AI modify error', e);
+            setToast({ message: 'Failed to modify via Hens', kind: 'error' });
+          } finally {
+            setIsModifying(false);
+          }
+        }}
         onPreview={() => setShowPreview(true)}
         onSaveDraft={async () => {
           try {
@@ -340,7 +623,7 @@ export default function EducatorDashboard() {
                 setDbTaskId(taskId);
                 setSelectedTask((prev) => prev ? { ...prev, id: created.task_id as any } : prev);
                 console.log('[Draft] created', created.task_id);
-                alert('Draft saved');
+                setToast({ message: 'Draft saved', kind: 'success' });
                 await refreshDbSidebar();
                 return; // do not proceed to PUT on first save
               } else {
@@ -357,7 +640,7 @@ export default function EducatorDashboard() {
                 due_at: scheduledEnd ? new Date(scheduledEnd).toISOString() : null,
               });
               await replaceSections(taskId, ai_task);
-              alert('Draft updated');
+              setToast({ message: 'Draft updated', kind: 'success' });
               await refreshDbSidebar();
             }
           } catch (e) {
@@ -365,7 +648,7 @@ export default function EducatorDashboard() {
           }
         }}
         onTaskSchedule={() => setShowSchedule(true)}
-        onSubmissionClick={() => {}}
+        onSubmissionClick={(sub) => { setSelectedSubmissionModal(sub); setShowSubmissionModal(true); }}
         educatorSubmissions={educatorSubmissions}
         approvedGrades={approvedGrades}
         hideSubmissionsPanel={selectedTask?.isDraft === true}
@@ -392,7 +675,17 @@ export default function EducatorDashboard() {
           placeholder="Describe your task shortly"
           maxWidth="2200px"
           className="w-full"
+          disabled={isGenerating}
         />
+        {isGenerating && (
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <svg className="animate-spin h-4 w-4 text-[#484de6]" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+            </svg>
+            <span>Generating task…</span>
+          </div>
+        )}
         <p className="text-gray-500 text-sm">
           The more detailed description, the more precise the result.
         </p>
@@ -405,6 +698,9 @@ export default function EducatorDashboard() {
   // CHANGED: allow expanding even in review view (remove row-click-to-navigate override)
   return (
     <>
+      {toast && (
+        <SimpleToast message={toast.message} kind={toast.kind} onClose={() => setToast(null)} />
+      )}
       <MainLayout
         mainDashboard={mainDashboard}
         isMinimized={isSidebarMinimized}
@@ -416,6 +712,7 @@ export default function EducatorDashboard() {
         userProfile={userProfile}
         onLogout={handleLogout} // CHANGED: pass logout to Sidebar
         onProfileUpdated={refreshProfile}
+        isLoading={isGenerating || isModifying || isPublishing}
       />
       {/* Preview modal (student view) */}
       {showingLayout3 && (
@@ -423,7 +720,10 @@ export default function EducatorDashboard() {
           isOpen={showPreview}
           onClose={() => setShowPreview(false)}
           taskData={taskFormData}
-          onPublish={() => { /* future: save and publish */ }}
+          onPublish={async () => {
+            setShowPreview(false);
+            setShowPublishModal(true);
+          }}
         />
       )}
 
@@ -445,36 +745,42 @@ export default function EducatorDashboard() {
         />
       )}
 
-      {/* Confirm publish without due date */}
-      {showNoDueDateModal && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
-            <h3 className="text-lg font-semibold mb-2">No due date set</h3>
-            <p className="text-sm text-gray-700 mb-4">
-              You have not set a due date. Publish as an open task (no due date)?
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
-                onClick={() => setShowNoDueDateModal(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 bg-white border rounded hover:bg-gray-50"
-                onClick={() => { setShowNoDueDateModal(false); setShowSchedule(true); }}
-              >
-                Set Due Date
-              </button>
-              <button
-                className="px-4 py-2 bg-[#484de6] text-white rounded hover:bg-[#3A3FE4]"
-                onClick={async () => { setShowNoDueDateModal(false); await publishNow(); }}
-              >
-                Publish as Open Task
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Submission details (educator grading) */}
+      {showingLayout3 && (
+        <SubmissionDetailsModal
+          isOpen={showSubmissionModal}
+          onClose={() => setShowSubmissionModal(false)}
+          selectedSubmission={selectedSubmissionModal as any}
+          // For now, educator approval flow is disabled for pending enrollments
+          onApproveGrade={() => {}}
+          onEducatorSubmission={() => { setShowSubmissionModal(false); }}
+          isGradeApproved={false}
+        />
+      )}
+
+      {/* Removed separate no-due-date confirmation; the publish modal handles Open task */}
+
+      {/* Publish confirm modal (optional passcode) */}
+      {showPublishModal && (
+        <PublishConfirmModal
+          isOpen={showPublishModal}
+          onClose={() => setShowPublishModal(false)}
+          scheduledText={(() => {
+            const s = scheduledStart ? new Date(scheduledStart) : null;
+            const e = scheduledEnd ? new Date(scheduledEnd) : null;
+            if (!s && !e) return null;
+            const fmt = (d: Date) => d.toLocaleDateString();
+            return `${s ? fmt(s) : 'Now'} – ${e ? fmt(e) : 'Open'}`;
+          })()}
+          existingLink={taskLink}
+          hasSchedule={Boolean(scheduledStart || scheduledEnd)}
+          onAddSchedule={() => { setShowPublishModal(false); setShowSchedule(true); }}
+          onConfirm={async ({ accessCode }) => {
+            setPendingAccessCode(accessCode || '');
+            setShowPublishModal(false);
+            await publishNow();
+          }}
+        />
       )}
     </>
   );
