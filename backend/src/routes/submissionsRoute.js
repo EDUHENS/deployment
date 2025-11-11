@@ -771,16 +771,99 @@ module.exports = (requireAuth) => {
 
       const files = Array.isArray(req.files) ? req.files : [];
       const exist = await pool.query(
-        `SELECT storage_key, file_name FROM submission_assets WHERE submission_id=$1 AND asset_type='file'`,
+        `SELECT id, storage_key, file_name FROM submission_assets WHERE submission_id=$1 AND asset_type='file'`,
         [id]
       );
       const hasStorage = new Set(exist.rows.filter(r => r.storage_key).map(r => r.storage_key));
-      const hasName = new Set(exist.rows.filter(r => !r.storage_key && r.file_name).map(r => r.file_name));
+      const nameMap = new Map(exist.rows.filter(r => r.file_name).map(r => [String(r.file_name).toLowerCase(), r]));
       const saved = [];
       for (const f of files) {
         const fileName = f.originalname || f.filename;
+        const fileNameLower = (fileName || '').toLowerCase();
         const storageKey = path.relative(process.cwd(), f.path).replaceAll('\\','/');
-        if (hasStorage.has(storageKey) || hasName.has(fileName)) continue;
+        if (hasStorage.has(storageKey)) continue;
+
+        // Default replace-if-single behavior: if there is exactly one existing file
+        // and the student uploads exactly one file, treat it as a replacement even
+        // if the filename changed (common flow: overwrite previous attempt).
+        if (files.length === 1 && exist.rows.length === 1 && !nameMap.has(fileNameLower)) {
+          const existing = exist.rows[0];
+          try {
+            if (existing.storage_key) {
+              const oldAbs = path.resolve(process.cwd(), existing.storage_key);
+              const isUnderUploads = oldAbs.startsWith(uploadRoot + path.sep) || oldAbs === uploadRoot;
+              if (isUnderUploads && fs.existsSync(oldAbs)) {
+                try { fs.unlinkSync(oldAbs); } catch {}
+              }
+            }
+          } catch {}
+          const upd = await pool.query(
+            `UPDATE submission_assets
+                SET file_name=$2, mime_type=$3, file_size=$4, storage_key=$5, updated_at=now()
+              WHERE id=$1
+              RETURNING id`,
+            [existing.id, fileName, f.mimetype || null, f.size || null, storageKey]
+          );
+          const assetId = upd.rows[0]?.id || existing.id;
+          try {
+            const abs = path.resolve(process.cwd(), storageKey);
+            const maxSize = 8 * 1024 * 1024; // 8MB
+            const stat = fs.statSync(abs);
+            if (stat.size <= maxSize) {
+              let text = await extractTextFromFile(abs, f.mimetype || '', fileName);
+              if (text && text.trim()) {
+                if (text.length > 20000) text = text.slice(0, 20000) + '\n...[truncated]';
+                await pool.query('UPDATE submission_assets SET extracted_text=$2 WHERE id=$1', [assetId, text]);
+              }
+            }
+          } catch {}
+          saved.push({ id: assetId, file_name: fileName, mime_type: f.mimetype, file_size: f.size, storage_key: storageKey });
+          nameMap.set(fileNameLower, { id: assetId, storage_key: storageKey, file_name: fileName });
+          continue;
+        }
+
+        // If a file with the same name already exists for this submission, replace it (update row)
+        const existing = nameMap.get(fileNameLower);
+        if (existing && existing.id) {
+          // Try to remove old file safely
+          try {
+            if (existing.storage_key) {
+              const oldAbs = path.resolve(process.cwd(), existing.storage_key);
+              const isUnderUploads = oldAbs.startsWith(uploadRoot + path.sep) || oldAbs === uploadRoot;
+              if (isUnderUploads && fs.existsSync(oldAbs)) {
+                try { fs.unlinkSync(oldAbs); } catch {}
+              }
+            }
+          } catch {}
+
+          const upd = await pool.query(
+            `UPDATE submission_assets
+                SET mime_type=$2, file_size=$3, storage_key=$4, updated_at=now()
+              WHERE id=$1
+              RETURNING id`,
+            [existing.id, f.mimetype || null, f.size || null, storageKey]
+          );
+          const assetId = upd.rows[0]?.id || existing.id;
+          // Best-effort text extraction for small files
+          try {
+            const abs = path.resolve(process.cwd(), storageKey);
+            const maxSize = 8 * 1024 * 1024; // 8MB
+            const stat = fs.statSync(abs);
+            if (stat.size <= maxSize) {
+              let text = await extractTextFromFile(abs, f.mimetype || '', fileName);
+              if (text && text.trim()) {
+                if (text.length > 20000) text = text.slice(0, 20000) + '\n...[truncated]';
+                await pool.query('UPDATE submission_assets SET extracted_text=$2 WHERE id=$1', [assetId, text]);
+              }
+            }
+          } catch {}
+          saved.push({ id: assetId, file_name: fileName, mime_type: f.mimetype, file_size: f.size, storage_key: storageKey });
+          // Update nameMap entry
+          nameMap.set(fileNameLower, { id: assetId, storage_key: storageKey, file_name: fileName });
+          continue;
+        }
+
+        // Insert new asset
         const ins = await pool.query(
           `INSERT INTO submission_assets (submission_id, asset_type, file_name, mime_type, file_size, storage_key)
            VALUES ($1,'file',$2,$3,$4,$5) RETURNING id`,
@@ -801,6 +884,7 @@ module.exports = (requireAuth) => {
           }
         } catch {}
         saved.push({ id: assetId, file_name: fileName, mime_type: f.mimetype, file_size: f.size, storage_key: storageKey });
+        nameMap.set(fileNameLower, { id: assetId, storage_key: storageKey, file_name: fileName });
       }
       await pool.query('UPDATE submissions SET updated_at=now() WHERE id=$1', [id]);
       return res.json({ ok: true, assets: saved });
