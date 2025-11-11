@@ -26,6 +26,73 @@ module.exports = (requireAuth) => {
   });
   const upload = multer({ storage });
 
+  // Best-effort: add extracted_text column for storing small text extracted from uploads
+  let ensuredExtractCol = false;
+  async function ensureExtractedTextColumnOnce() {
+    if (ensuredExtractCol) return;
+    try {
+      await pool.query('ALTER TABLE submission_assets ADD COLUMN IF NOT EXISTS extracted_text text');
+      ensuredExtractCol = true;
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[migrate] unable to add extracted_text column:', e?.message || e);
+      ensuredExtractCol = true; // avoid retrying per request
+    }
+  }
+
+  // Lightweight text extraction for PDFs/DOCX/plain text (images optional via OCR)
+  function looksTextLike(mime = '', name = '') {
+    const mt = (mime || '').toLowerCase();
+    const n = (name || '').toLowerCase();
+    return (
+      mt.startsWith('text/') || mt.includes('json') || mt.includes('xml') || mt.includes('html') ||
+      mt.includes('css') || mt.includes('javascript') ||
+      n.endsWith('.md') || n.endsWith('.txt') || n.endsWith('.html') || n.endsWith('.css') || n.endsWith('.js') || n.endsWith('.ts') || n.endsWith('.json')
+    );
+  }
+
+  async function extractTextFromFile(absPath, mime, name) {
+    try {
+      const n = (name || '').toLowerCase();
+      const mt = (mime || '').toLowerCase();
+      // Plain text-like files: just read utf8 (bounded by size in caller)
+      if (looksTextLike(mt, n)) {
+        const buf = fs.readFileSync(absPath);
+        return buf.toString('utf8');
+      }
+      // PDF
+      if (mt.includes('pdf') || n.endsWith('.pdf')) {
+        try {
+          const pdf = require('pdf-parse');
+          const data = fs.readFileSync(absPath);
+          const res = await pdf(data);
+          return res?.text || '';
+        } catch { return ''; }
+      }
+      // DOCX
+      if (n.endsWith('.docx') || mt.includes('word')) {
+        try {
+          const mammoth = require('mammoth');
+          const res = await mammoth.extractRawText({ path: absPath });
+          return (res?.value || '').toString();
+        } catch { return ''; }
+      }
+      // Optional OCR for images (feature‑flagged)
+      if (process.env.AI_OCR_IMAGES === '1' && (mt.startsWith('image/') || /(\.png|\.jpg|\.jpeg)$/i.test(n))) {
+        try {
+          const { createWorker } = require('tesseract.js');
+          const worker = await createWorker();
+          await worker.loadLanguage('eng');
+          await worker.initialize('eng');
+          const { data: { text } } = await worker.recognize(absPath);
+          await worker.terminate();
+          return text || '';
+        } catch { return ''; }
+      }
+      return '';
+    } catch { return ''; }
+  }
+
   async function getUserIdFromReq(req) {
     const claims = req?.auth?.payload || {};
     const sub = claims?.sub;
@@ -356,7 +423,52 @@ module.exports = (requireAuth) => {
       const artefacts = await buildSubmissionArtefacts(submissionId);
       const submission = { links: artefacts.links, files: artefacts.files, notes: s.rows[0]?.notes || '' };
 
-      // --- Begin: Enrich with GitHub/raw contents so model can see student work ---
+      // --- Begin: Enrich with local text files and GitHub/raw contents so model can see student work ---
+      async function buildLocalTextPreviews(submissionId) {
+        try {
+          const rows = await pool.query(
+            `SELECT file_name, mime_type, storage_key, file_size
+               FROM submission_assets
+              WHERE submission_id=$1 AND asset_type='file' AND storage_key IS NOT NULL
+              ORDER BY created_at ASC`,
+            [submissionId]
+          );
+          const items = [];
+          let total = 0;
+          const allow = (mt = '', name = '') => {
+            const lower = (mt || '').toLowerCase();
+            const n = (name || '').toLowerCase();
+            return (
+              lower.startsWith('text/') ||
+              lower.includes('json') ||
+              lower.includes('xml') ||
+              lower.includes('html') ||
+              lower.includes('css') ||
+              lower.includes('javascript') ||
+              n.endsWith('.md') || n.endsWith('.txt') || n.endsWith('.html') || n.endsWith('.css') || n.endsWith('.js') || n.endsWith('.ts') || n.endsWith('.json')
+            );
+          };
+          for (const r of rows.rows) {
+            if (!allow(r.mime_type, r.file_name)) continue;
+            const abs = path.resolve(process.cwd(), r.storage_key);
+            const isUnderUploads = abs.startsWith(uploadRoot + path.sep) || abs === uploadRoot;
+            if (!isUnderUploads || !fs.existsSync(abs)) continue;
+            try {
+              const stat = fs.statSync(abs);
+              if (stat.size > 200_000) continue; // skip very large files
+              const buf = fs.readFileSync(abs);
+              let txt = buf.toString('utf8');
+              if (!txt.trim()) continue;
+              if (txt.length > 8000) txt = txt.slice(0, 8000) + '\n...[truncated]';
+              items.push({ label: r.file_name || path.basename(abs), content: txt });
+              total += txt.length;
+              if (items.length >= 8 || total > 50_000) break;
+            } catch {}
+          }
+          if (items.length === 0) return '';
+          return ['','Student local files (previews):', ...items.map(it => `# ${it.label}\n${it.content}`)].join('\n');
+        } catch { return ''; }
+      }
       async function normalizeGitHubLinkToRawCandidates(link) {
         try {
           const url = new URL(link);
@@ -452,7 +564,7 @@ module.exports = (requireAuth) => {
       // --- End: enrichment ---
 
       // Build prompt (reuse logic from submissionsAiRoute)
-      const system = 'You are a strict but fair educator assessing a student submission. Always grade against the provided rubric and criteria only. If evidence is missing or links are inaccessible, say so and grade conservatively. Return JSON only.';
+      const system = 'You are a strict but fair educator assessing a student submission. Always grade against the provided rubric and criteria only. If evidence is missing or links/files/images are inaccessible, say so and grade conservatively. Return JSON only.';
       const rubric = Array.isArray(ai_task.rubric) ? ai_task.rubric : [];
       const toRows = (r) => (Array.isArray(r) ? r.map(row => (Array.isArray(row) ? row.join(' | ') : String(row))).join('\n') : 'No rubric provided.');
       const user = [
@@ -470,12 +582,50 @@ module.exports = (requireAuth) => {
         `Files: ${submission.files.join(', ') || 'None'}`,
         `Note: ${submission.notes || 'None'}`,
         '',
-        'Instructions: For each criterion choose one level (use rubric headers), give a 1-2 sentence justification with evidence. Provide improvements. Decide overall pass|fail. Output JSON: { overall, criteria:[{name,level,comment,improvement}], summary, evidence_checked }.',
+        'Instructions: For each criterion provide a numeric score (1–5), choose one level (use rubric headers), and give a 1–2 sentence justification with specific evidence. Provide improvements. Compute an overall_score on a 0–100 scale (weighted evenly unless the rubric implies otherwise). Also decide an overall label pass|fail using your professional judgement given the evidence. Return JSON only with the following shape:\n{\n  overall_score: number (0-100),\n  overall: "pass" | "fail",\n  criteria: [{ name: string, score: number (1-5), level: string, comment: string, improvement: string }],\n  summary: string,\n  evidence_checked: true\n}',
+        await buildLocalTextPreviews(submissionId),
         fetchedBlock
       ].join('\n');
 
       // If OpenAI key present, call model; else store prompt as ai_feedback with pending tag
       if (process.env.OPENAI_API_KEY && process.env.AI_AUTOGRADE === '1') {
+        // Optional: include local images for vision grading when enabled
+        async function buildVisionImageContents(submissionId) {
+          try {
+            if (process.env.AI_VISION !== '1') return [];
+            const r = await pool.query(
+              `SELECT file_name, mime_type, storage_key, file_size
+                 FROM submission_assets
+                WHERE submission_id=$1 AND asset_type='file' AND storage_key IS NOT NULL
+                ORDER BY created_at ASC`,
+              [submissionId]
+            );
+            const items = [];
+            const maxEach = 5 * 1024 * 1024; // 5MB per image
+            for (const row of r.rows) {
+              const name = (row.file_name || '').toLowerCase();
+              const mt = (row.mime_type || '').toLowerCase();
+              const isImg = mt.startsWith('image/') || /\.(png|jpg|jpeg)$/i.test(name);
+              if (!isImg) continue;
+              const abs = path.resolve(process.cwd(), row.storage_key);
+              const isUnderUploads = abs.startsWith(uploadRoot + path.sep) || abs === uploadRoot;
+              if (!isUnderUploads || !fs.existsSync(abs)) continue;
+              try {
+                const stat = fs.statSync(abs);
+                if (stat.size > maxEach) continue;
+                const buf = fs.readFileSync(abs);
+                const b64 = buf.toString('base64');
+                const mime = mt || (name.endsWith('.png') ? 'image/png' : name.match(/\.jpe?g$/) ? 'image/jpeg' : 'application/octet-stream');
+                const dataUrl = `data:${mime};base64,${b64}`;
+                items.push({ type: 'image_url', image_url: { url: dataUrl } });
+                if (items.length >= 4) break; // cap
+              } catch {}
+            }
+            return items;
+          } catch { return []; }
+        }
+
+        const visionAttachments = await buildVisionImageContents(submissionId);
         const resp = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -486,7 +636,9 @@ module.exports = (requireAuth) => {
             model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
             messages: [
               { role: 'system', content: system },
-              { role: 'user', content: user }
+              visionAttachments && visionAttachments.length
+                ? { role: 'user', content: [ { type: 'text', text: user }, ...visionAttachments ] }
+                : { role: 'user', content: user }
             ],
             temperature: 0.2
           })
@@ -495,14 +647,24 @@ module.exports = (requireAuth) => {
         const content = data?.choices?.[0]?.message?.content || '';
         // try parse JSON from content
         let overall = null;
+        let overallScore = null;
         try {
           let cleaned = content.trim();
           // strip markdown fences if present
           cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '');
           const parsed = JSON.parse(cleaned);
-          overall = parsed?.overall;
+          overall = parsed?.overall || parsed?.overall_label;
+          if (typeof parsed?.overall_score === 'number') overallScore = parsed.overall_score;
         } catch {}
-        const ai_score = overall === 'pass' ? 1 : overall === 'fail' ? 0 : null;
+        // Prefer numeric overall_score (0-100). Fallback to pass/fail mapping.
+        let ai_score = null;
+        if (Number.isFinite(overallScore)) {
+          ai_score = Math.max(0, Math.min(100, Math.round(overallScore)));
+        } else if (overall === 'pass') {
+          ai_score = 60; // default passing
+        } else if (overall === 'fail') {
+          ai_score = 0;
+        }
         await pool.query(
           `UPDATE submissions SET ai_feedback=$2, ai_score=$3, updated_at=now() WHERE id=$1`,
           [submissionId, content || '[no-content]', ai_score]
@@ -600,6 +762,7 @@ module.exports = (requireAuth) => {
   // Upload one or more files for a submission (student must own it)
   router.post('/:id/assets/upload', requireAuth, upload.array('files', 10), async (req, res) => {
     try {
+      await ensureExtractedTextColumnOnce();
       const studentId = await getUserIdFromReq(req);
       const { id } = req.params;
       const owns = await pool.query('SELECT student_id FROM submissions WHERE id=$1', [id]);
@@ -618,12 +781,26 @@ module.exports = (requireAuth) => {
         const fileName = f.originalname || f.filename;
         const storageKey = path.relative(process.cwd(), f.path).replaceAll('\\','/');
         if (hasStorage.has(storageKey) || hasName.has(fileName)) continue;
-        await pool.query(
+        const ins = await pool.query(
           `INSERT INTO submission_assets (submission_id, asset_type, file_name, mime_type, file_size, storage_key)
-           VALUES ($1,'file',$2,$3,$4,$5)`,
+           VALUES ($1,'file',$2,$3,$4,$5) RETURNING id`,
           [id, fileName, f.mimetype || null, f.size || null, storageKey]
         );
-        saved.push({ file_name: fileName, mime_type: f.mimetype, file_size: f.size, storage_key: storageKey });
+        const assetId = ins.rows[0]?.id;
+        // Best-effort text extraction for small files
+        try {
+          const abs = path.resolve(process.cwd(), storageKey);
+          const maxSize = 8 * 1024 * 1024; // 8MB
+          const stat = fs.statSync(abs);
+          if (stat.size <= maxSize) {
+            let text = await extractTextFromFile(abs, f.mimetype || '', fileName);
+            if (text && text.trim()) {
+              if (text.length > 20000) text = text.slice(0, 20000) + '\n...[truncated]';
+              await pool.query('UPDATE submission_assets SET extracted_text=$2 WHERE id=$1', [assetId, text]);
+            }
+          }
+        } catch {}
+        saved.push({ id: assetId, file_name: fileName, mime_type: f.mimetype, file_size: f.size, storage_key: storageKey });
       }
       await pool.query('UPDATE submissions SET updated_at=now() WHERE id=$1', [id]);
       return res.json({ ok: true, assets: saved });

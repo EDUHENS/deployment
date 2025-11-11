@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import ModalFrame from '../shared/ModalFrame';
 
 interface StudentSubmissionSummaryModalProps {
@@ -15,6 +16,12 @@ export default function StudentSubmissionSummaryModal({
   status,
   feedback,
 }: StudentSubmissionSummaryModalProps) {
+  useEffect(() => {
+    if (feedback) {
+      // eslint-disable-next-line no-console
+      console.debug('[AI] Raw feedback (hidden in UI):', feedback);
+    }
+  }, [feedback]);
   let parsed: any = null;
   try {
     if (feedback) {
@@ -23,7 +30,10 @@ export default function StudentSubmissionSummaryModal({
     }
   } catch {}
   const overall = (parsed?.overall || status || 'pending') as 'pass' | 'fail' | 'pending';
-  const headline = overall === 'pending' ? 'Grading in progress' : overall === 'pass' ? 'Passed' : 'Failed';
+  const scoreNum = typeof parsed?.overall_score === 'number' ? Math.max(0, Math.min(100, Math.round(parsed.overall_score))) : undefined;
+  const fivePoint = typeof scoreNum === 'number' ? Math.max(1, Math.min(5, Math.ceil(scoreNum / 20))) : undefined;
+  const suffix = typeof scoreNum === 'number' ? ` (${scoreNum}/100${fivePoint ? ", " + fivePoint + "/5" : ''})` : '';
+  const headline = overall === 'pending' ? 'Grading in progress' : (overall === 'pass' ? 'Passed' : 'Failed') + suffix;
   const tone = overall === 'pass' ? 'text-emerald-600' : overall === 'fail' ? 'text-red-600' : 'text-slate-600';
 
   return (
@@ -61,7 +71,7 @@ export default function StudentSubmissionSummaryModal({
               </ul>
             </div>
           )}
-          {feedback ? console.debug('[AI] Raw feedback (hidden in UI):', feedback) : null}
+          {/* Raw feedback logged to console via useEffect; kept out of UI */}
         </div>
       ) : (
         <p className="text-sm text-slate-500">We are preparing your AI feedback. This may take a few moments.</p>

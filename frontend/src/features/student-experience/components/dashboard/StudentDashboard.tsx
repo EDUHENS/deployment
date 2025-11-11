@@ -69,7 +69,8 @@ export default function StudentDashboard({ onLogout }: StudentDashboardProps) {
         const aiFeedback = latest?.ai_feedback || null;
         if (aiScore != null || aiFeedback) {
           let status: 'pass' | 'fail' | 'pending' = 'pending';
-          if (aiScore === 1) status = 'pass';
+          if (typeof aiScore === 'number') status = aiScore >= 60 ? 'pass' : 'fail';
+          else if (aiScore === 1) status = 'pass';
           else if (aiScore === 0) status = 'fail';
           else if (typeof aiFeedback === 'string') {
             try {
@@ -95,7 +96,8 @@ export default function StudentDashboard({ onLogout }: StudentDashboardProps) {
         const aiScore = latest?.ai_score;
         const aiFeedback = latest?.ai_feedback || null;
         let status: 'pass' | 'fail' | 'pending' | null = null;
-        if (aiScore === 1) status = 'pass';
+        if (typeof aiScore === 'number') status = aiScore >= 60 ? 'pass' : 'fail';
+        else if (aiScore === 1) status = 'pass';
         else if (aiScore === 0) status = 'fail';
         else if (typeof aiFeedback === 'string') {
           try {

@@ -166,13 +166,11 @@ export async function saveSubmission(taskId: string, submission: SubmissionPaylo
   const token = await getToken();
   // Map UI payload to backend assets
   const assets: any[] = [];
+  // Only send link assets here. File binaries must be uploaded via
+  // POST /api/submissions/:id/assets/upload (see uploadSubmissionFile).
   for (const l of submission.links || []) {
     const url = (l.url || '').trim();
     if (url) assets.push({ asset_type: 'link', url });
-  }
-  for (const f of submission.files || []) {
-    const name = (f.name || '').trim();
-    if (name) assets.push({ asset_type: 'file', file_name: name });
   }
   const notes = (submission.notes || '').trim();
 

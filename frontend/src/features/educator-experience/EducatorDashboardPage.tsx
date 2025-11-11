@@ -190,7 +190,8 @@ export default function EducatorDashboard() {
                 const mapped = sub.submissions.map((s: any, idx: number) => {
                   const studentName = [s.student?.first_name, s.student?.last_name].filter(Boolean).join(' ') || (s.student?.email || 'Student');
                   const parsed = parseAiFeedbackRaw(s.ai_feedback);
-                  const aiOverall = typeof s.ai_score === 'number' ? (s.ai_score >= 1 ? 'pass' : 'fail') : (parsed.overall || 'pending');
+                  // Treat ai_score as 0–100 if present. Threshold: >=60 => pass
+                  const aiOverall = typeof s.ai_score === 'number' ? (s.ai_score >= 60 ? 'pass' : 'fail') : (parsed.overall || 'pending');
                   const details = parsed.details;
                   const attachments = (Array.isArray(s.assets) ? s.assets : []).map((a: any) => {
                     const rawUrl = (a.url || '').toString().trim();
