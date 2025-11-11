@@ -58,7 +58,7 @@ export default function EducatorDashboard() {
   // Current task share link (if published)
   const [taskLink, setTaskLink] = useState<string | null>(null);
   const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL as string) || 'http://localhost:5001';
-  const [toast, setToast] = useState<{ message: string; kind?: 'info' | 'success' | 'error' } | null>(null);
+  const [toast, setToast] = useState<{ message: string; kind?: 'info' | 'success' | 'error'; position?: 'top-right' | 'center' } | null>(null);
   const [isModifying, setIsModifying] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
@@ -623,7 +623,7 @@ const publishNow = async () => {
                 setDbTaskId(taskId);
                 setSelectedTask((prev) => prev ? { ...prev, id: created.task_id as any } : prev);
                 console.log('[Draft] created', created.task_id);
-                setToast({ message: 'Draft saved', kind: 'success' });
+            setToast({ message: 'Draft saved', kind: 'success', position: 'center' });
                 await refreshDbSidebar();
                 return; // do not proceed to PUT on first save
               } else {
@@ -640,7 +640,7 @@ const publishNow = async () => {
                 due_at: scheduledEnd ? new Date(scheduledEnd).toISOString() : null,
               });
               await replaceSections(taskId, ai_task);
-              setToast({ message: 'Draft updated', kind: 'success' });
+              setToast({ message: 'Draft updated', kind: 'success', position: 'center' });
               await refreshDbSidebar();
             }
           } catch (e) {

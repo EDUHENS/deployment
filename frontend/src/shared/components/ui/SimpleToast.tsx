@@ -23,9 +23,8 @@ export default function SimpleToast({
   const bg = kind === 'success' ? 'bg-green-600' : kind === 'error' ? 'bg-red-600' : 'bg-gray-800';
 
   return (
-    <div className="fixed top-4 right-4 z-[1000]">
-      <div className={`${bg} text-white shadow-lg rounded px-4 py-3 max-w-sm`}>{message}</div>
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center pointer-events-none">
+      <div className={`${bg} text-white shadow-lg rounded px-5 py-4 max-w-md text-center pointer-events-auto`}>{message}</div>
     </div>
   );
 }
-
