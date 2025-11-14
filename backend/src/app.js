@@ -101,39 +101,20 @@ app.use('/api/enroll', enrollRoute);
 app.use('/api/submissions', submissionsRoute);
 app.use('/api/submissions/ai', submissionsAiRoute);
 
-const initializeApp = async () => {
-  const dbConnected = await connectDB();
-  if (!dbConnected) {
-    console.error('Failed to connect to database.');
-    process.exit(1);
-  }
+// Initialize database connection
+connectDB().then(() => {
   console.log('Database connected successfully');
+}).catch(error => {
+  console.error('Database connection error:', error);
+});
+
+// For local development only
+if (require.main === module) {
   const PORT = process.env.PORT || 5001;
-  console.log(`Starting server on port ${PORT}...`);
-  
-  const server = app.listen(PORT, () => {
+  app.listen(PORT, () => {
     console.log(`API listening on http://localhost:${PORT}`);
     console.log(`Connected to database: ${process.env.DB_NAME}`);
   });
-
-  server.on('error', (error) => {
-    console.error('Server error:', error);
-    process.exit(1);
-  });
-  
-  return server; 
-};
-initializeApp().catch(error => {
-  console.error('Initialization error:', error);
-  process.exit(1);
-}); 
-//const PORT = process.env.PORT || 5001;
-
-/*
-app.listen(PORT, () => {
-  console.log(`API listening on http://localhost:${PORT}`);
-});
-*/
-
+}
 
 module.exports = app;
