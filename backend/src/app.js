@@ -27,7 +27,13 @@ const app = express();
 app.use(helmet());
 //app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
 app.use(cors({ 
-  origin: [ 'http://localhost:3000',  'http://localhost:5173'], 
+  origin: [ 
+    'http://localhost:3000',  
+    'http://localhost:5173',
+    'https://v1-one-silk.vercel.app',
+    'https://v1-hakans-projects-ac4539c6.vercel.app',
+    'https://v1-hakan-asmaoglu-hakans-projects-ac4539c6.vercel.app'
+  ], 
   credentials: true })); 
 app.use(express.json());
 app.use(cookieParser());
