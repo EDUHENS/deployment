@@ -2,7 +2,7 @@
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
 
 async function getToken(): Promise<string> {
-  const r = await fetch('/auth/access-token', { credentials: 'include' });
+  const r = await fetch('/api/auth/access-token', { credentials: 'include' });
   if (!r.ok) throw new Error('token error');
   const j: any = await r.json();
   return j.accessToken || j.token;
@@ -32,12 +32,26 @@ export async function createDraft(params: {
   access_code?: string | null;
 }): Promise<{ ok: boolean; task_id?: string } & any> {
   const token = await getToken();
+  console.log('[createDraft] Calling backend with token present:', Boolean(token));
   const r = await fetch(`${BACKEND_URL}/api/tasks`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(params),
   });
-  return r.json();
+  console.log('[createDraft] Backend response status:', r.status, r.statusText);
+  if (!r.ok) {
+    const errorText = await r.text();
+    console.error('[createDraft] Backend error:', errorText);
+    try {
+      const errorJson = JSON.parse(errorText);
+      return errorJson;
+    } catch {
+      return { ok: false, error: errorText || 'Failed to create draft' };
+    }
+  }
+  const result = await r.json();
+  console.log('[createDraft] Backend response:', result);
+  return result;
 }
 
 export async function replaceSections(taskId: string, ai_task: AiTaskPayload) {

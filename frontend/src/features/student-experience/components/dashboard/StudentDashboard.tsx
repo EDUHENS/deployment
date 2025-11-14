@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { MainLayout } from '@/shared/components/layout';
 import EnrollTaskView from '../enroll/EnrollTaskView';
 import StudentTaskWorkspace from '../workspace/StudentTaskWorkspace';
@@ -12,7 +13,8 @@ import { getLatestSubmission } from '../../services/studentTaskService';
 import { useStudentTasks } from '../../hooks/useStudentTasks';
 import type { StudentTask } from '../../types/studentTask';
 import type { Task as SidebarTask } from '@/features/educator-experience/types';
-import { getMe } from '@/services/authApi';
+import { ensureRole, getMe } from '@/services/authApi';
+import SimpleToast from '@/shared/components/ui/SimpleToast';
 
 interface StudentDashboardProps {
   onLogout?: () => void;
@@ -20,6 +22,7 @@ interface StudentDashboardProps {
 
 export default function StudentDashboard({ onLogout }: StudentDashboardProps) {
   const { tasks, loading, enroll, saveDraft, submitTask } = useStudentTasks();
+  const router = useRouter();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showSavedModal, setShowSavedModal] = useState(false);
   const [showSubmittedModal, setShowSubmittedModal] = useState(false);
@@ -28,6 +31,8 @@ export default function StudentDashboard({ onLogout }: StudentDashboardProps) {
   const [aiModalFeedback, setAiModalFeedback] = useState<string | null>(null);
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
   const [userProfile, setUserProfile] = useState<{ name: string; avatar?: string; role?: string }>();
+  const [isSwitchingRole, setIsSwitchingRole] = useState(false);
+  const [toast, setToast] = useState<{ message: string; kind?: 'info' | 'success' | 'error'; position?: 'top-right' | 'center' } | null>(null);
 
   const selectedTask: StudentTask | undefined = useMemo(
     () => tasks.find((task) => task.id === (selectedTaskId ?? '')),
@@ -38,6 +43,25 @@ export default function StudentDashboard({ onLogout }: StudentDashboardProps) {
     const newTask = await enroll(payload);
     if (newTask) {
       setSelectedTaskId(newTask.id);
+    }
+  };
+
+  const handleReturnToEnroll = () => {
+    setSelectedTaskId(null);
+    setIsSidebarMinimized(false);
+  };
+
+  const handleSwitchToEducator = async () => {
+    try {
+      setIsSwitchingRole(true);
+      const res = await ensureRole('teacher');
+      if (res?.ok === false) throw new Error(res?.error || 'role error');
+      router.push('/educator-experience');
+    } catch (error) {
+      console.error('Failed to switch to educator role', error);
+      setToast({ message: 'Could not open educator experience right now.', kind: 'error' });
+    } finally {
+      setIsSwitchingRole(false);
     }
   };
 
@@ -170,6 +194,9 @@ export default function StudentDashboard({ onLogout }: StudentDashboardProps) {
 
   return (
     <>
+      {toast && (
+        <SimpleToast message={toast.message} kind={toast.kind} onClose={() => setToast(null)} />
+      )}
       <MainLayout
         mainDashboard={
           <>
@@ -208,6 +235,24 @@ export default function StudentDashboard({ onLogout }: StudentDashboardProps) {
         onProfileUpdated={refreshProfile}
         audience="student"
       />
+      <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-2 text-sm">
+        <button
+          type="button"
+          onClick={handleReturnToEnroll}
+          className="rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-slate-700 shadow hover:bg-white transition"
+        >
+          Back to Enrollment Hub
+        </button>
+        <button
+          type="button"
+          onClick={handleSwitchToEducator}
+          disabled={isSwitchingRole}
+          className="rounded-full bg-[#484de6] px-4 py-2 text-white shadow hover:bg-[#3b42d9] disabled:opacity-60 disabled:cursor-not-allowed transition flex flex-col items-end"
+        >
+          <span>{isSwitchingRole ? 'Opening Educator Experience…' : 'Open Educator Experience'}</span>
+          <span className="text-[11px] text-indigo-100">for test purposes</span>
+        </button>
+      </div>
       
       <SubmissionSavedModal isOpen={showSavedModal} onClose={() => setShowSavedModal(false)} />
       <SubmissionSubmittedModal

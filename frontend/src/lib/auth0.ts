@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 // Customize the Auth0 client to gracefully handle callback errors
 // e.g., when the user cancels at the IdP and Auth0 redirects back with error=access_denied
 export const auth0 = new Auth0Client({
-  // Reason: Request API tokens for the backend by default so /auth/access-token
+  // Reason: Request API tokens for the backend by default so /api/auth/access-token
   // returns a token the backend accepts (audience must match backend's expected audience).
   authorizationParameters: {
     audience: process.env.AUTH0_AUDIENCE,
@@ -18,7 +18,7 @@ export const auth0 = new Auth0Client({
 
     if (error) {
       // Reason: When the user cancels at the IdP (e.g., Google), Auth0 redirects back
-      // with an error. Redirecting to the SDK route "/auth/login" would immediately
+      // with an error. Redirecting to the SDK route "/api/auth/login" would immediately
       // re-trigger the Hosted Login. We want to show our own app's login UI instead.
       // Therefore, redirect to the app's local login page ("/") and include context.
       const reason = ("cause" in error && (error as any).cause?.code) || error.code || "access_denied";

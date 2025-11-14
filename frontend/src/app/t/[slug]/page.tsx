@@ -4,7 +4,7 @@ import React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 async function getToken(): Promise<string> {
-  const r = await fetch('/auth/access-token', { credentials: 'include' });
+  const r = await fetch('/api/auth/access-token', { credentials: 'include' });
   if (!r.ok) throw new Error('Failed to obtain access token');
   const j: any = await r.json();
   return j.accessToken || j.token;

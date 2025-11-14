@@ -53,19 +53,21 @@ module.exports = (requireAuth) => {
         }
 
         if (!email) {
-          console.warn('Auth0 profile has no email. Skipping DB sync for sub:', claims.sub);
-        } else {
-          await userModel.createOrUpdateAuth0User({
-            sub: claims.sub,
-            email,
-            email_verified: claims.email_verified || false,
-            given_name,
-            family_name,
-            picture,
-            nickname,
-          });
-          console.log('User synced to database successfully');
+          const fallbackEmail = `${claims.sub.replace(/[^a-zA-Z0-9]/g, '_')}@noemail.local`;
+          console.warn('Auth0 profile has no email. Using fallback:', fallbackEmail);
+          email = fallbackEmail;
         }
+
+        await userModel.createOrUpdateAuth0User({
+          sub: claims.sub,
+          email,
+          email_verified: claims.email_verified || false,
+          given_name,
+          family_name,
+          picture,
+          nickname,
+        });
+        console.log('User synced to database successfully');
       } catch (error) {
         console.error('Error syncing Auth0 user:', error);
       }
@@ -270,6 +272,40 @@ module.exports = (requireAuth) => {
     } catch (error) {
       console.error('Error in PATCH /api/auth/me:', error);
       res.status(500).json({ ok: false, error: 'Failed to update user profile' });
+    }
+  });
+
+  // Allow authenticated users to self-assign specific roles (educator/student dashboard access)
+  router.post('/me/roles', requireAuth, syncAuth0User, async (req, res) => {
+    try {
+      const { role } = req.body || {};
+      console.log('[POST /me/roles] Requested role:', role);
+      const allowed = ['student', 'teacher'];
+      if (!allowed.includes(role)) {
+        console.error('[POST /me/roles] Invalid role requested:', role);
+        return res.status(400).json({ ok: false, error: 'Invalid role' });
+      }
+      const claims = req.auth.payload;
+      console.log('[POST /me/roles] Auth0 sub:', claims.sub);
+      const user = await userModel.findByAuth0Id(claims.sub);
+      if (!user) {
+        console.error('[POST /me/roles] User not found in database for sub:', claims.sub);
+        return res.status(404).json({ ok: false, error: 'User not found' });
+      }
+      console.log('[POST /me/roles] User found:', user.id, user.email);
+      const assignment = await userModel.assignRole(user.id, role);
+      console.log('[POST /me/roles] Role assignment result:', assignment);
+      const roles = await userModel.getUserRoles(user.id);
+      console.log('[POST /me/roles] User roles after assignment:', roles.map((r) => r.role));
+      res.json({
+        ok: true,
+        role,
+        assigned: Boolean(assignment),
+        roles: roles.map((r) => r.role),
+      });
+    } catch (error) {
+      console.error('[POST /me/roles] Error assigning self-role:', error);
+      res.status(500).json({ ok: false, error: 'Failed to assign role' });
     }
   });
 

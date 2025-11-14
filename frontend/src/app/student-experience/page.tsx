@@ -16,7 +16,7 @@ export default function StudentExperiencePage() {
   if (isLoading) return null;
 
   // Reason: Always route post-login to Dashboard Selection (role choice UI).
-  // Avoid "/auth/login" and preserve the intention via `returnTo=/dashboard-selection`.
+  // Avoid "/api/auth/login" and preserve the intention via `returnTo=/dashboard-selection`.
   if (!user) { router.push('/?returnTo=/dashboard-selection'); return null; }
 
   // Optional logout handler, mirroring educator page behavior
@@ -24,7 +24,7 @@ export default function StudentExperiencePage() {
     if (typeof window !== 'undefined') {
       const origin = window.location.origin;
       const returnTo = encodeURIComponent(`${origin}/`);
-      window.location.href = `/auth/logout?returnTo=${returnTo}`;
+      window.location.href = `/api/auth/logout?returnTo=${returnTo}`;
     }
   };
 

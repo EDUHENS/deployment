@@ -3,26 +3,24 @@
  * TODO LIST:
  * After db implemenate 
  * TODO(db): handleTaskClick load asign taskId 的 TaskFormData and setTaskFormData(...)
-   TODO(db): replace useEffect(fetchDashboardBootstrap)，change：GET /tasks、GET /submissions、GET /tasks/:id/form
    TODO(db): design draft and publish process to backedn onTaskFormChange、onSaveDraft、onPublishTask
  */
 // CHANGED: Render the educator landing view on entry
 // Aligns with src/App.tsx (Sidebar tasks + centered input)
 import React, { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { MainLayout, Layout1 } from '@/shared/components/layout'; // CHANGED
 import { AInputBox } from '@/shared/components/forms'; // CHANGED
 import ModifyPreviewModal from '@/features/educator-experience/components/TaskCreation/ModifyPreviewModal';
 import type { Task, TaskFormData, StudentSubmission, EducatorSubmissionsMap, ApprovedGradesMap } from './types'; // CHANGED
-import { mockTasks, defaultTaskFormData } from '@/mocks/data/tasks'; // CHANGED: Use existing project mock tasks
-import { buildMockSubmissions } from '@/mocks/data/submissions';
-import { fetchDashboardBootstrap } from '@/services/api/educatorDashboard'; // CHANGED
+import { defaultTaskFormData } from '@/features/educator-experience/constants/defaultTaskFormData';
 import { OngoingTasks } from './components'; // CHANGED
 import PreviewModal from '@/features/educator-experience/components/TaskCreation/PreviewModal';
 import PublishConfirmModal from '@/features/educator-experience/components/TaskCreation/PublishConfirmModal';
 import SubmissionDetailsModal from '@/features/educator-experience/components/SubmissionDetails/SubmissionDetailsModal';
 import TaskScheduleModal from '@/features/educator-experience/components/TaskCreation/TaskScheduleModal';
-import { getMe } from '@/services/authApi';
+import { ensureRole, getMe } from '@/services/authApi';
 import { generateAITask, convertAITaskToFormData, convertFormDataToAiTask } from '@/services/aiTaskCreation';
 import { createDraft, replaceSections, updateTaskMain, publishTask, listTasks, TaskListItem, getTaskForm, getTaskEnrollments, getTaskSubmissions } from '@/services/taskApi';
 import SimpleToast from '@/shared/components/ui/SimpleToast';
@@ -39,8 +37,8 @@ export default function EducatorDashboard() {
   // CHANGED: Data required by OngoingTasks
   const [submissions, setSubmissions] = useState<StudentSubmission[]>([]);
   const [taskFormData, setTaskFormData] = useState<TaskFormData>(defaultTaskFormData);
-  const [educatorSubmissions, setEducatorSubmissions] = useState<EducatorSubmissionsMap>({});
-  const [approvedGrades, setApprovedGrades] = useState<ApprovedGradesMap>({});
+  const [educatorSubmissions] = useState<EducatorSubmissionsMap>({});
+  const [approvedGrades] = useState<ApprovedGradesMap>({});
   const [userProfile, setUserProfile] = useState<{ name: string; avatar?: string; role?: string }>();
   const [formKey, setFormKey] = useState(0);
   const [showSchedule, setShowSchedule] = useState(false);
@@ -68,20 +66,11 @@ export default function EducatorDashboard() {
   const [previewBeforeSteps, setPreviewBeforeSteps] = useState<string[]>([]);
   const [previewAfterSteps, setPreviewAfterSteps] = useState<string[]>([]);
   const [previewAddedSteps, setPreviewAddedSteps] = useState<string[]>([]);
+  const [isSwitchingRole, setIsSwitchingRole] = useState(false);
+  const router = useRouter();
 
-  // Helper: only this demo task should use mock student data
-  // Demo mock slugs: tasks whose students should always come from mock data
-  const DEMO_MOCK_SLUGS = new Set<string>(['f6a6a5066514']);
-  const isDemoMockTask = (t: { title?: string } | null) =>
-    !!t?.title && t.title.toLowerCase().includes('building restful apis');
-
-  // CHANGED: Merge policy — only show mock tasks when explicitly enabled
   const [dbSidebarTasks, setDbSidebarTasks] = useState<Task[]>([]);
-  const USE_MOCK = (process.env.NEXT_PUBLIC_SHOW_MOCK_TASKS || '').toString() === '1';
-  const tasks: Task[] = USE_MOCK ? mockTasks : [];
-  const allTasks = useMemo(() => {
-    return [...dbSidebarTasks, ...tasks];
-  }, [dbSidebarTasks, tasks]);
+  const allTasks = useMemo(() => dbSidebarTasks, [dbSidebarTasks]);
 
   function parseAiFeedbackRaw(raw: any): { overall?: 'pass' | 'fail'; summary?: string; criteria?: Array<any>; details: string[] } {
     const details: string[] = [];
@@ -154,112 +143,93 @@ export default function EducatorDashboard() {
       setShowingLayout3(true);
       // Ensure form components remount to avoid stale internal state
       setFormKey((k) => k + 1);
-      // If this is a DB task (UUID string), load its form from backend
       const isDbId = typeof task.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(task.id as any);
-      if (isDbId) {
-        const r = await getTaskForm(task.id as any);
-        if (r?.ok && r.ai_task) {
-          const form = convertAITaskToFormData(r.ai_task);
-          setFormKey((k) => k + 1);
-          setTaskFormData(form);
-          setDbTaskId(task.id as any);
-          setShowTaskLink(Boolean(r.task?.link));
-          setTaskLink(r.task?.link || null);
-          // If the DB task has due_at, reflect into sidebar days remaining
-          if (r.task?.due_at) {
-            const end = new Date(r.task.due_at);
-            const days = Math.max(0, Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-            setSelectedTask((prev) => prev ? { ...prev, dueDate: days } : prev);
-          }
-          // If this DB task matches a demo slug or title, use mock students; otherwise load enrollments
-          const slug = r?.task?.share_slug as string | undefined;
-          const dbTitle = (r?.task?.task_title || task.title || '').toString();
-          const useMock = (slug && DEMO_MOCK_SLUGS.has(slug)) || isDemoMockTask({ title: dbTitle });
-          if (useMock) {
-            try {
-              const demoSubs = buildMockSubmissions();
-              setSubmissions(demoSubs);
-            } catch {
-              setSubmissions([]);
-            }
-          } else {
-            try {
-              // Prefer real submissions if any; otherwise fall back to enrollments-as-pending
-              const sub = await getTaskSubmissions(task.id as any);
-              if (sub?.ok && Array.isArray(sub.submissions) && sub.submissions.length > 0) {
-                const mapped = sub.submissions.map((s: any, idx: number) => {
-                  const studentName = [s.student?.first_name, s.student?.last_name].filter(Boolean).join(' ') || (s.student?.email || 'Student');
-                  const parsed = parseAiFeedbackRaw(s.ai_feedback);
-                  // Treat ai_score as 0–100 if present. Threshold: >=60 => pass
-                  const aiOverall = typeof s.ai_score === 'number' ? (s.ai_score >= 60 ? 'pass' : 'fail') : (parsed.overall || 'pending');
-                  const details = parsed.details;
-                  const attachments = (Array.isArray(s.assets) ? s.assets : []).map((a: any) => {
-                    const rawUrl = (a.url || '').toString().trim();
-                    const hasScheme = /^https?:\/\//i.test(rawUrl);
-                    let href: string | undefined = undefined;
-                    if (rawUrl) {
-                      href = hasScheme ? rawUrl : `https://${rawUrl}`;
-                    } else if (a.storage_key && a.id && s.id) {
-                      href = `${BACKEND_URL}/api/submissions/${s.id}/assets/${a.id}/download`;
-                    }
-                    const lower = (href || '').toLowerCase();
-                    return {
-                      type: lower.includes('github.com') ? 'github' : 'pdf',
-                      name: a.file_name || rawUrl || 'attachment',
-                      size: '',
-                      href,
-                    };
-                  });
-                  return {
-                    id: idx + 1,
-                    studentName,
-                    submissionDate: new Date(s.submitted_at || s.graded_at || Date.now()).toISOString(),
-                    status: (s.status || 'pending') as any,
-                    aiAssessment: { overall: aiOverall as any, details },
-                    attachments,
-                    studentNote: String(s.notes || '')
-                  } as StudentSubmission;
-                });
-                setSubmissions(mapped);
-              } else {
-                const enr = await getTaskEnrollments(task.id as any);
-                if (enr?.ok && Array.isArray(enr.enrollments)) {
-                  const mapped = enr.enrollments.map((e, idx) => ({
-                    id: idx + 1,
-                    studentName: [e.first_name, e.last_name].filter(Boolean).join(' ') || (e.email || 'Student'),
-                    submissionDate: new Date(e.enrolled_at).toISOString(),
-                    status: 'pending' as const,
-                    aiAssessment: { overall: 'pending' as any, details: [] },
-                    attachments: [],
-                    studentNote: ''
-                  }));
-                  setSubmissions(mapped);
-                } else {
-                  setSubmissions([]);
-                }
-              }
-            } catch (err) {
-              console.warn('Failed to load submissions/enrollments for task', err);
-              setSubmissions([]);
-            }
-          }
-        }
-      } else {
-        // mock task clicked—keep current behavior
+      if (!isDbId) {
         setDbTaskId(null);
         setShowTaskLink(false);
         setTaskLink(null);
-        // Only the specific demo task should use mock students
-        if (isDemoMockTask(task)) {
-          try {
-            const demoSubs = buildMockSubmissions();
-            setSubmissions(demoSubs);
-          } catch {
+        setSubmissions([]);
+        return;
+      }
+
+      const taskId = task.id as string;
+      const r = await getTaskForm(taskId);
+      if (r?.ok && r.ai_task) {
+        const form = convertAITaskToFormData(r.ai_task);
+        setFormKey((k) => k + 1);
+        setTaskFormData(form);
+        setDbTaskId(taskId);
+        setShowTaskLink(Boolean(r.task?.link));
+        setTaskLink(r.task?.link || null);
+        if (r.task?.due_at) {
+          const end = new Date(r.task.due_at);
+          const days = Math.max(0, Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+          setSelectedTask((prev) => (prev ? { ...prev, dueDate: days } : prev));
+        }
+      }
+
+      try {
+        const sub = await getTaskSubmissions(taskId);
+        if (sub?.ok && Array.isArray(sub.submissions) && sub.submissions.length > 0) {
+          const mapped = sub.submissions.map((s: any, idx: number) => {
+            const studentName =
+              [s.student?.first_name, s.student?.last_name].filter(Boolean).join(' ') ||
+              (s.student?.email || 'Student');
+            const parsed = parseAiFeedbackRaw(s.ai_feedback);
+            const aiOverall =
+              typeof s.ai_score === 'number'
+                ? (s.ai_score >= 60 ? 'pass' : 'fail')
+                : (parsed.overall || 'pending');
+            const details = parsed.details;
+            const attachments = (Array.isArray(s.assets) ? s.assets : []).map((a: any) => {
+              const rawUrl = (a.url || '').toString().trim();
+              const hasScheme = /^https?:\/\//i.test(rawUrl);
+              let href: string | undefined;
+              if (rawUrl) {
+                href = hasScheme ? rawUrl : `https://${rawUrl}`;
+              } else if (a.storage_key && a.id && s.id) {
+                href = `${BACKEND_URL}/api/submissions/${s.id}/assets/${a.id}/download`;
+              }
+              const lower = (href || '').toLowerCase();
+              return {
+                type: lower.includes('github.com') ? 'github' : 'pdf',
+                name: a.file_name || rawUrl || 'attachment',
+                size: '',
+                href,
+              };
+            });
+            return {
+              id: idx + 1,
+              studentName,
+              submissionDate: new Date(s.submitted_at || s.graded_at || Date.now()).toISOString(),
+              status: (s.status || 'pending') as any,
+              aiAssessment: { overall: aiOverall as any, details },
+              attachments,
+              studentNote: String(s.notes || ''),
+            } as StudentSubmission;
+          });
+          setSubmissions(mapped);
+        } else {
+          const enr = await getTaskEnrollments(taskId);
+          if (enr?.ok && Array.isArray(enr.enrollments)) {
+            const mapped = enr.enrollments.map((e, idx) => ({
+              id: idx + 1,
+              studentName:
+                [e.first_name, e.last_name].filter(Boolean).join(' ') || (e.email || 'Student'),
+              submissionDate: new Date(e.enrolled_at).toISOString(),
+              status: 'pending' as const,
+              aiAssessment: { overall: 'pending' as any, details: [] },
+              attachments: [],
+              studentNote: '',
+            }));
+            setSubmissions(mapped);
+          } else {
             setSubmissions([]);
           }
-        } else {
-          setSubmissions([]);
         }
+      } catch (err) {
+        console.warn('Failed to load submissions/enrollments for task', err);
+        setSubmissions([]);
       }
     } catch (e) {
       console.error('Failed to load task form', e);
@@ -291,6 +261,7 @@ export default function EducatorDashboard() {
           formData: form,
         } as Task;
         setSelectedTask(placeholderTask);
+        setSubmissions([]);
         // Reset DB id since this is a brand-new, unsaved draft in UI
         setDbTaskId(null);
         setShowingLayout3(true);
@@ -309,29 +280,48 @@ export default function EducatorDashboard() {
   const handleLogout = () => {
     if (typeof window !== 'undefined') {
       const origin = window.location.origin; // e.g., http://localhost:3000
-      // Redirect to a protected page which will push to /auth/login
+      // Redirect to a protected page which will push to /api/auth/login
       // via useUser guard, avoiding the need for a local login route.
       const returnTo = encodeURIComponent(`${origin}/`);
-      window.location.href = `/auth/logout?returnTo=${returnTo}`;
+      window.location.href = `/api/auth/logout?returnTo=${returnTo}`;
     }
   };
 
-  // CHANGED: Load bootstrap data on mount (prevents undefined submissions)
+  const handleReturnToBuilder = () => {
+    setShowingLayout3(false);
+    setSelectedTask(null);
+    setIsSidebarMinimized(false);
+  };
+
+  const handleSwitchToStudent = async () => {
+    try {
+      setIsSwitchingRole(true);
+      const res = await ensureRole('student');
+      if (res?.ok === false) throw new Error(res?.error || 'role error');
+      router.push('/student-experience');
+    } catch (error) {
+      console.error('Failed to switch to student role', error);
+      setToast({ message: 'Could not open learner experience right now.', kind: 'error' });
+    } finally {
+      setIsSwitchingRole(false);
+    }
+  };
+
   useEffect(() => {
     let alive = true;
-    fetchDashboardBootstrap()
-      .then((data) => {
-        if (!alive) return;
-        setSubmissions(data.submissions || []);
-        setTaskFormData(data.defaultTaskForm || defaultTaskFormData);
-        setEducatorSubmissions(data.educatorSubmissions || {});
-        setApprovedGrades(data.approvedGrades || {});
-      })
-      .catch((e) => console.error('Educator bootstrap failed', e));
-
     // Fetch logged-in user to populate sidebar profile
     (async () => {
       try {
+        // Ensure user has teacher role before loading educator dashboard
+        console.log('[EducatorDashboard] Ensuring teacher role...');
+        const roleResult = await ensureRole('teacher');
+        if (!alive) return;
+        if (!roleResult?.ok) {
+          console.error('[EducatorDashboard] Failed to ensure teacher role:', roleResult);
+        } else {
+          console.log('[EducatorDashboard] Teacher role ensured');
+        }
+        
         const me = await getMe();
         if (!alive || !me?.ok) return;
         const u = me.user || {};
@@ -346,7 +336,7 @@ export default function EducatorDashboard() {
       }
     })();
 
-    // Load DB drafts/published tasks for sidebar (merge with mocks)
+    // Load DB drafts/published tasks for sidebar
     (async () => {
       try {
         const r = await listTasks();
@@ -389,9 +379,6 @@ export default function EducatorDashboard() {
       // ignore refresh error
     }
   };
-
-  // Helper: check UUID format (avoid trying to PUT with timestamp ids)
-  const isUUID = (v: any) => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
   // CHANGED: Main panel (landing vs OngoingTasks after a task is selected)
   // Helper to refresh DB task list in sidebar (after publish/save)
@@ -715,6 +702,24 @@ const publishNow = async () => {
         onProfileUpdated={refreshProfile}
         isLoading={isGenerating || isModifying || isPublishing}
       />
+      <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-2 text-sm">
+        <button
+          type="button"
+          onClick={handleReturnToBuilder}
+          className="rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-slate-700 shadow hover:bg-white transition"
+        >
+          Back to AI Task Builder
+        </button>
+        <button
+          type="button"
+          onClick={handleSwitchToStudent}
+          disabled={isSwitchingRole}
+          className="rounded-full bg-[#484de6] px-4 py-2 text-white shadow hover:bg-[#3b42d9] disabled:opacity-60 disabled:cursor-not-allowed transition flex flex-col items-end"
+        >
+          <span>{isSwitchingRole ? 'Opening Learner Experience…' : 'Open Learner Experience'}</span>
+          <span className="text-[11px] text-indigo-100">for test purposes</span>
+        </button>
+      </div>
       {/* Preview modal (student view) */}
       {showingLayout3 && (
         <PreviewModal

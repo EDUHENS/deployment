@@ -21,9 +21,9 @@ export type AccessTokenResponse =
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
 
 async function getAccessToken(): Promise<string> {
-  console.log('[authApi] Requesting /auth/access-token');
-  const res = await fetch('/auth/access-token', { credentials: 'include' });
-  console.log('[authApi] /auth/access-token status:', res.status);
+  console.log('[authApi] Requesting /api/auth/access-token');
+  const res = await fetch('/api/auth/access-token', { credentials: 'include' });
+  console.log('[authApi] /api/auth/access-token status:', res.status);
   if (!res.ok) throw new Error('Failed to obtain access token');
   const data = (await res.json()) as AccessTokenResponse;
   const token = (data as any).accessToken || (data as any).token;
@@ -83,4 +83,33 @@ export async function updateMe(profile: { firstName?: string; lastName?: string;
     body: JSON.stringify(body),
   });
   return res.json();
+}
+
+export async function ensureRole(role: 'student' | 'teacher') {
+  console.log('[authApi] ensureRole called with role:', role);
+  try {
+    const res = await authFetch(`${BACKEND_URL}/api/auth/me/roles`, {
+      method: 'POST',
+      body: JSON.stringify({ role }),
+    });
+    console.log('[authApi] ensureRole response status:', res.status, res.statusText);
+    
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error('[authApi] ensureRole error response:', errorText);
+      try {
+        const errorJson = JSON.parse(errorText);
+        return errorJson;
+      } catch {
+        return { ok: false, error: errorText || 'Failed to assign role' };
+      }
+    }
+    
+    const result = await res.json();
+    console.log('[authApi] ensureRole result:', result);
+    return result;
+  } catch (error) {
+    console.error('[authApi] ensureRole exception:', error);
+    return { ok: false, error: String(error) };
+  }
 }

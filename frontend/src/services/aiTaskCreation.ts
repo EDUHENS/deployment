@@ -96,7 +96,7 @@ export async function generateAITask(teacherInput: string): Promise<AITaskCreati
     console.log('[AI] Backend URL:', BACKEND_URL);
 
     // Get an access token via the Next route to authorize backend call
-    const tokenRes = await fetch('/auth/access-token', { credentials: 'include' });
+    const tokenRes = await fetch('/api/auth/access-token', { credentials: 'include' });
     if (!tokenRes.ok) throw new Error('Failed to obtain access token');
     const tokenJson: any = await tokenRes.json();
     const token: string = tokenJson.accessToken || tokenJson.token;

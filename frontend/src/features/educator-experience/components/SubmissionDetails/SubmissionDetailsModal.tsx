@@ -45,7 +45,7 @@ const SubmissionDetailsModal: React.FC<SubmissionDetailsModalProps> = ({
   const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL as string) || 'http://localhost:5001';
 
   async function getToken(): Promise<string> {
-    const r = await fetch('/auth/access-token', { credentials: 'include' });
+    const r = await fetch('/api/auth/access-token', { credentials: 'include' });
     if (!r.ok) throw new Error('token error');
     const j: any = await r.json();
     return j.accessToken || j.token;
