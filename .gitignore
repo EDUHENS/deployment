@@ -44,3 +44,8 @@ dist-ssr/
 # 忽略整個 tools 資料夾
 /tools/
 .vercel
+
+# ── Development & Testing
+.githooks/
+backend/test-*.js
+backend/debug-*.js
