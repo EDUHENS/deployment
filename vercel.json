@@ -1,18 +1,12 @@
 {
-  "github": {
-    "silent": true
-  },
   "buildCommand": "npm run build",
   "installCommand": "npm install",
+  "framework": "nextjs",
+  "outputDirectory": "frontend/.next",
   "rewrites": [
     {
       "source": "/api/:path*",
       "destination": "/api/index"
     }
-  ],
-  "functions": {
-    "api/index.js": {
-      "includeFiles": "backend/**"
-    }
-  }
+  ]
 }
