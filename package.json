@@ -5,7 +5,14 @@
   "scripts": {
     "build": "npm run install:backend && cd frontend && npm install && npm run build",
     "install:backend": "cd backend && npm install",
-    "postinstall": "npm run install:backend"
+    "postinstall": "npm run install:backend",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "start:backend": "cd backend && npm start",
+    "start:frontend": "cd frontend && npm start"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }
-
