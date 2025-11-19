@@ -10,7 +10,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/auth/:path*',           //login, logout callback / profile
+    '/api/auth/:path*',         // Auth0 SDK routes
     '/dashboard-selection',   
     '/educator-experience',     // set up first
     '/student-experience',      // set up for student  
