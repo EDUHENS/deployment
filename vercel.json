@@ -2,8 +2,16 @@
   "github": {
     "silent": true
   },
-  "buildCommand": "cd frontend && npm install && npm run build",
-  "installCommand": "cd frontend && npm install",
-  "framework": null,
-  "outputDirectory": "frontend/.next"
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api"
+    }
+  ],
+  "functions": {
+    "frontend/api/index.js": {
+      "runtime": "nodejs20.x",
+      "maxDuration": 30
+    }
+  }
 }
