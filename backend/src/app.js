@@ -30,9 +30,9 @@ app.use(cors({
   origin: [ 
     'http://localhost:3000',  
     'http://localhost:5173',
-    'https://v1-one-silk.vercel.app',
-    'https://v1-hakans-projects-ac4539c6.vercel.app',
-    'https://v1-hakan-asmaoglu-hakans-projects-ac4539c6.vercel.app'
+    'https://deployment-gufpqnj9i-eduhens.vercel.app',
+    /^https:\/\/deployment-.*\.vercel\.app$/,
+    /^https:\/\/.*\.eduhens\.vercel\.app$/
   ], 
   credentials: true })); 
 app.use(express.json({ limit: '5mb' }));
