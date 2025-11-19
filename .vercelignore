@@ -1,5 +1,3 @@
-backend/
-render.yaml
 
 # Trigger rebuild with fixed env vars
 # Trigger rebuild with clean env vars
