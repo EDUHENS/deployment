@@ -5,3 +5,4 @@ render.yaml
 # Trigger rebuild with clean env vars
 # Trigger rebuild for correct backend url
 # Trigger rebuild to test build failure
+# Trigger rebuild without NODE_ENV
