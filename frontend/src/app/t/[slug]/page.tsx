@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { getBackendUrl } from '@/lib/backendUrl';
 
 async function getToken(): Promise<string> {
   const r = await fetch('/api/auth/access-token', { credentials: 'include' });
@@ -24,8 +25,8 @@ export default function EnrollPage() {
         if (!params?.slug) return;
         setState('loading');
         const token = await getToken();
-        const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
-        const res = await fetch(`${BACKEND_URL}/api/enroll/${params.slug}`, {
+        const backendUrl = getBackendUrl();
+        const res = await fetch(`${backendUrl}/api/enroll/${params.slug}`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
         });

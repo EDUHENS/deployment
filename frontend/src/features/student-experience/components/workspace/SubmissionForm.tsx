@@ -8,6 +8,9 @@ import HappyHensMascot from '../shared/HappyHensMascot';
 import SeriousHensMascot from '../shared/SeriousHensMascot';
 import SimpleToast from '@/shared/components/ui/SimpleToast';
 import { getAIAssessment, type AIAssessment } from '@/features/student-experience/services/studentTaskService';
+import { getBackendUrl } from '@/lib/backendUrl';
+
+const BACKEND_URL = getBackendUrl();
 
 async function getToken(): Promise<string> {
   const r = await fetch('/api/auth/access-token', { credentials: 'include' });
@@ -274,7 +277,7 @@ export default function SubmissionForm({
                               alert('Submission ID not found');
                               return;
                             }
-                            const url = `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001'}/api/submissions/${submissionId}/assets/${file.assetId}/download`;
+                            const url = `${BACKEND_URL}/api/submissions/${submissionId}/assets/${file.assetId}/download`;
                             const resp = await fetch(url, {
                               headers: { Authorization: `Bearer ${token}` },
                             });

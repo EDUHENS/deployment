@@ -1,6 +1,8 @@
 // src/services/authApi.ts
 // Reason: Fetch Auth0 access token from Next SDK route and call backend with Authorization.
 
+import { getBackendUrl } from '@/lib/backendUrl';
+
 // Accept both our custom route shape and the SDK's default shape
 export type AccessTokenResponse =
   | {
@@ -18,7 +20,7 @@ export type AccessTokenResponse =
       audience?: string;
     };
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
+const BACKEND_URL = getBackendUrl();
 
 async function getAccessToken(): Promise<string> {
   console.log('[authApi] Requesting /api/auth/access-token');

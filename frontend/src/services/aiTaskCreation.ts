@@ -1,4 +1,5 @@
 import type { TaskFormData } from '../features/educator-experience/types';
+import { getBackendUrl } from '@/lib/backendUrl';
 
 export interface AITaskCreationRequest {
   ai_task_creation_guidelines: {
@@ -92,7 +93,7 @@ export async function generateAITask(teacherInput: string): Promise<AITaskCreati
   try {
     console.log('[AI] generateAITask called with prompt:', teacherInput);
     // Call backend route to generate (no persistence)
-    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
+    const BACKEND_URL = getBackendUrl();
     console.log('[AI] Backend URL:', BACKEND_URL);
 
     // Get an access token via the Next route to authorize backend call

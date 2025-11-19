@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CircleX, CheckCircle, FileText, Github } from 'lucide-react';
 import CloseButton from '@/shared/components/ui/CloseButton';
 import type { SubmissionAttachment } from '@/features/educator-experience/types/submission';
+import { getBackendUrl } from '@/lib/backendUrl';
 
 // TODO(db): Wire approve and educator submission actions to backend.
 // - Persist educatorGrade/feedback
@@ -43,7 +44,7 @@ const SubmissionDetailsModal: React.FC<SubmissionDetailsModalProps> = ({
 }) => {
   const [educatorGrade, setEducatorGrade] = useState<'pass' | 'fail' | null>(null);
   const [educatorFeedback, setEducatorFeedback] = useState('');
-  const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL as string) || 'http://localhost:5001';
+  const BACKEND_URL = getBackendUrl();
 
   async function getToken(): Promise<string> {
     const r = await fetch('/api/auth/access-token', { credentials: 'include' });

@@ -1,7 +1,8 @@
 import type { EnrollPayload, StudentTask, SubmissionPayload } from '../types/studentTask';
 import { parseResourceLink } from '@/shared/utils/resourceLinks';
+import { getBackendUrl } from '@/lib/backendUrl';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
+const BACKEND_URL = getBackendUrl();
 
 async function getToken(): Promise<string> {
   const r = await fetch('/api/auth/access-token', { credentials: 'include' });

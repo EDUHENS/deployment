@@ -9,6 +9,7 @@
 // Aligns with src/App.tsx (Sidebar tasks + centered input)
 import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { getBackendUrl } from '@/lib/backendUrl';
 import { MainLayout, Layout1 } from '@/shared/components/layout'; // CHANGED
 import { AInputBox } from '@/shared/components/forms'; // CHANGED
 import ModifyPreviewModal from '@/features/educator-experience/components/TaskCreation/ModifyPreviewModal';
@@ -64,7 +65,7 @@ export default function EducatorDashboard() {
   const [showTaskLink, setShowTaskLink] = useState(false);
   // Current task share link (if published)
   const [taskLink, setTaskLink] = useState<string | null>(null);
-  const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL as string) || 'http://localhost:5001';
+  const BACKEND_URL = getBackendUrl();
   const [toast, setToast] = useState<{ message: string; kind?: 'info' | 'success' | 'error'; position?: 'top-right' | 'center' } | null>(null);
   
   // Helper function to show toast notifications

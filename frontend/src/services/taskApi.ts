@@ -1,5 +1,7 @@
 // src/services/taskApi.ts
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
+import { getBackendUrl } from '@/lib/backendUrl';
+
+const BACKEND_URL = getBackendUrl();
 
 async function getToken(): Promise<string> {
   const r = await fetch('/api/auth/access-token', { credentials: 'include' });
