@@ -2,10 +2,16 @@
 import { Auth0Client } from "@auth0/nextjs-auth0/server";
 import { NextResponse } from "next/server";
 
+// Debug log to check env vars
+console.log("AUTH0 Config Debug:", {
+  audience: process.env.AUTH0_AUDIENCE,
+  clientIdLength: process.env.AUTH0_CLIENT_ID?.length,
+  scope: process.env.AUTH0_SCOPE,
+});
+
 // Customize the Auth0 client to gracefully handle callback errors
 // e.g., when the user cancels at the IdP and Auth0 redirects back with error=access_denied
 export const auth0 = new Auth0Client({
-  clientId: "9gHJBpgKtFnXQ8UMPxPFdw3cLeDR81oL", // Hardcoded to ensure no env var issues
   // Reason: Request API tokens for the backend by default so /api/auth/access-token
   // returns a token the backend accepts (audience must match backend's expected audience).
   authorizationParameters: {
