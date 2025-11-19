@@ -4,14 +4,25 @@
 // - /api/auth/logout
 // - /api/auth/me
 // - /api/auth/access-token
-import { auth0 } from '@/lib/auth0';
-import { NextRequest } from 'next/server';
+import { handleAuth, handleLogin, handleCallback, handleLogout } from '@auth0/nextjs-auth0';
+import { NextResponse } from 'next/server';
 
-export async function GET(req: NextRequest) {
-  return auth0.handleAuth(req);
-}
-
-export async function POST(req: NextRequest) {
-  return auth0.handleAuth(req);
-}
+export const GET = handleAuth({
+  login: handleLogin({
+    authorizationParams: {
+      audience: process.env.AUTH0_AUDIENCE,
+      scope: process.env.AUTH0_SCOPE || 'openid profile email offline_access',
+    },
+    returnTo: '/dashboard-selection',
+  }),
+  callback: handleCallback({
+    afterCallback: async (req, res, session) => {
+      // Custom callback handling if needed
+      return session;
+    },
+  }),
+  logout: handleLogout({
+    returnTo: '/',
+  }),
+});
 
