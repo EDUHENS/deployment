@@ -2,24 +2,18 @@
   "github": {
     "silent": true
   },
-  "builds": [
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "rewrites": [
     {
-      "src": "frontend/package.json",
-      "use": "@vercel/next"
-    },
-    {
-      "src": "frontend/api/index.js",
-      "use": "@vercel/node"
+      "source": "/api/:path*",
+      "destination": "/api/index"
     }
   ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/frontend/api/index.js"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/frontend/$1"
+  "functions": {
+    "api/index.js": {
+      "runtime": "nodejs20.x",
+      "maxDuration": 30
     }
-  ]
+  }
 }
