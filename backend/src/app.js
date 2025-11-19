@@ -30,8 +30,8 @@ app.use(cors({
   origin: [ 
     'http://localhost:3000',  
     'http://localhost:5173',
-    'https://deployment-gufpqnj9i-eduhens.vercel.app',
-    /^https:\/\/deployment-.*\.vercel\.app$/,
+    'https://deployment-git-main-eduhens.vercel.app',
+    /^https:\/\/deployment-.*-eduhens\.vercel\.app$/,
     /^https:\/\/.*\.eduhens\.vercel\.app$/
   ], 
   credentials: true })); 
