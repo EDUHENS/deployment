@@ -2,9 +2,11 @@
 
 const nextConfig = {
   allowedDevOrigins: ['localhost', '192.168.100.45'],
+  // Completely disable ESLint during builds (Vercel deployment)
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // Completely disable TypeScript type checking during builds
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -24,6 +26,10 @@ const nextConfig = {
       },
     ],
   },
+  // Disable source maps in production to reduce build time and bundle size
+  productionBrowserSourceMaps: false,
+  // Optimize output for serverless
+  output: 'standalone',
 }
 
 module.exports = nextConfig
