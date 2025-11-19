@@ -11,6 +11,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "./popover"
+import { toFinlandTime } from "../../../features/shared/hooks/useRealtimeDate"
 
 interface DateTimePickerProps {
   date: Date | undefined
@@ -49,6 +50,17 @@ export function DateTimePicker({ date, setDate, placeholder = "Pick a date and t
         newDate.setHours(9)
         newDate.setMinutes(0)
       }
+      
+      // Validate against minDate (Finland time)
+      if (minDate) {
+        const selectedFinland = toFinlandTime(newDate);
+        const minFinland = toFinlandTime(minDate);
+        if (selectedFinland < minFinland) {
+          // Don't allow selection before minimum date
+          return;
+        }
+      }
+      
       setDate(newDate)
     } else {
       setDate(undefined)
@@ -61,6 +73,17 @@ export function DateTimePicker({ date, setDate, placeholder = "Pick a date and t
       const newDate = date ? new Date(date) : new Date()
       newDate.setHours(numValue)
       if (!date) newDate.setMinutes(0)
+      
+      // Validate against minDate (Finland time)
+      if (minDate) {
+        const selectedFinland = toFinlandTime(newDate);
+        const minFinland = toFinlandTime(minDate);
+        if (selectedFinland < minFinland) {
+          // Don't allow setting time before minimum date
+          return;
+        }
+      }
+      
       setDate(newDate)
       setHourInput(value.padStart(2, "0"))
     }
@@ -73,6 +96,17 @@ export function DateTimePicker({ date, setDate, placeholder = "Pick a date and t
       const newDate = date ? new Date(date) : new Date()
       newDate.setMinutes(numValue)
       if (!date) newDate.setHours(9)
+      
+      // Validate against minDate (Finland time)
+      if (minDate) {
+        const selectedFinland = toFinlandTime(newDate);
+        const minFinland = toFinlandTime(minDate);
+        if (selectedFinland < minFinland) {
+          // Don't allow setting time before minimum date
+          return;
+        }
+      }
+      
       setDate(newDate)
       setMinuteInput(value.padStart(2, "0"))
     }

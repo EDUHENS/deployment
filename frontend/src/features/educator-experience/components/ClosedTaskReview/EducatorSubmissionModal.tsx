@@ -1,21 +1,29 @@
 'use client';
 
 import { useState } from 'react';
-import { CircleX, Star, FileText, CheckCircle, XCircle } from 'lucide-react';
+import { Star, FileText, CheckCircle, XCircle } from 'lucide-react';
+import CloseButton from '@/shared/components/ui/CloseButton';
 
 interface EducatorSubmissionModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmitGrade?: (grade: number | string, feedback: string) => void;
+  studentName?: string;
+  submissionDate?: string | null;
 }
 
 export default function EducatorSubmissionModal({ 
   isOpen, 
   onClose,
-  onSubmitGrade
+  onSubmitGrade,
+  studentName,
+  submissionDate
 }: EducatorSubmissionModalProps) {
   const [grade, setGrade] = useState<number | string>(0);
   const [feedback, setFeedback] = useState('');
+  const formattedSubmissionDate = submissionDate
+    ? new Date(submissionDate).toLocaleString()
+    : 'Not submitted yet';
 
   // Determine grading system based on task data
   if (!isOpen) return null;
@@ -30,12 +38,7 @@ export default function EducatorSubmissionModal({
     <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-60 p-8">
       <div className="bg-[#f8f8f8] border-4 border-[#cccccc] border-solid relative rounded-[32px] w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
         {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute right-4 top-4 z-10 text-gray-400 hover:text-gray-600 hover:animate-rotate-360 transition-colors duration-200 cursor-pointer"
-        >
-          <CircleX className="w-8 h-8" />
-        </button>
+        <CloseButton onClick={onClose} className="absolute right-4 top-4 z-10" size="md" />
 
         {/* Scrollable Content */}
         <div className="flex flex-col gap-6 items-start p-8 overflow-y-auto scrollbar-thin">
@@ -53,7 +56,7 @@ export default function EducatorSubmissionModal({
                 Student Name
               </p>
               <p className="font-['Helvetica_Neue:Regular',sans-serif] text-[#222222] text-[20px] tracking-[0.4px]">
-                James Rodriguez
+                {studentName || 'Unknown Student'}
               </p>
             </div>
             <div className="flex flex-col gap-2 flex-1">
@@ -61,7 +64,7 @@ export default function EducatorSubmissionModal({
                 Submission Date
               </p>
               <p className="font-['Helvetica_Neue:Regular',sans-serif] text-[#222222] text-[20px] tracking-[0.4px]">
-                2023-09-08 / 08:00
+                {formattedSubmissionDate}
               </p>
             </div>
           </div>

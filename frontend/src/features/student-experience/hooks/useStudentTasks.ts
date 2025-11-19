@@ -9,7 +9,7 @@ interface UseStudentTasksResult {
   enroll: (payload: EnrollPayload) => Promise<StudentTask | undefined>;
   refresh: () => Promise<void>;
   saveDraft: (taskId: string, submission: SubmissionPayload) => Promise<StudentTask | undefined>;
-  submitTask: (taskId: string) => Promise<StudentTask | undefined>;
+  submitTask: (taskId: string, clarityScore?: number | null) => Promise<StudentTask | undefined>;
 }
 
 export function useStudentTasks(): UseStudentTasksResult {
@@ -39,10 +39,11 @@ export function useStudentTasks(): UseStudentTasksResult {
     return updated;
   };
 
-  const handleSubmit = async (taskId: string) => {
-    const updated = await submitFinal(taskId);
-    await load();
-    return updated;
+  const handleSubmit = async (taskId: string, clarityScore?: number | null) => {
+    await submitFinal(taskId, clarityScore);
+    // Refresh in background - don't block UI
+    load().catch(() => {}); // Fire and forget
+    return undefined; // Return immediately for faster UX
   };
 
   return {

@@ -1,6 +1,7 @@
 'use client';
 
 import { Edit3, Plus, CircleX } from 'lucide-react';
+import { parseResourceLink } from '../../utils/resourceLinks';
 
 export type InputType = 'text' | 'textarea' | 'array' | 'rubric';
 
@@ -15,6 +16,7 @@ export interface FormInputProps {
   multiline?: boolean;
   addButtonText?: string;
   itemPlaceholder?: string;
+  linkPlaceholder?: string;
 }
 
 export default function FormInput({
@@ -27,7 +29,8 @@ export default function FormInput({
   className = '',
   multiline = false,
   addButtonText = 'Add Item',
-  itemPlaceholder = 'Enter item...'
+  itemPlaceholder = 'Enter item...',
+  linkPlaceholder = 'Enter title – https://example.com'
 }: FormInputProps) {
   const handleTextChange = (newValue: string) => {
     onChange(newValue);
@@ -54,6 +57,16 @@ export default function FormInput({
       const newArray = value.filter((_, i) => i !== index);
       onChange(newArray);
     }
+  };
+
+  const handleResourceFieldChange = (index: number, field: 'title' | 'url', newValue: string) => {
+    if (!Array.isArray(value)) return;
+    const current = value[index] || '';
+    const parsed = parseResourceLink(current) || { title: '', href: '' };
+    const nextTitle = field === 'title' ? newValue : parsed.title || '';
+    const nextUrl = field === 'url' ? newValue : parsed.href || parsed.displayUrl || '';
+    const combined = nextUrl && nextTitle ? `${nextTitle.trim()} - ${nextUrl.trim()}` : (nextTitle || nextUrl).trim();
+    handleArrayChange(index, combined);
   };
 
   const renderInput = () => {
@@ -87,36 +100,69 @@ export default function FormInput({
           </div>
         );
 
-      case 'array':
+      case 'array': {
         const arrayValue = Array.isArray(value) ? value : [];
+        const isResourceField = title.toLowerCase().includes('resource');
         return (
           <div className="flex flex-col gap-2 items-start w-full">
-            {arrayValue.map((item, index) => (
-              <div key={index} className="flex gap-1 items-start w-full">
-                <p className="font-['Helvetica_Neue:Medium',sans-serif] leading-normal not-italic relative shrink-0 text-[#999999] text-[14px] text-nowrap tracking-[0.28px] whitespace-pre">
-                  {index + 1}.
-                </p>
-                <div className="basis-0 bg-white border border-[#e6e6e6] border-solid grow min-h-px min-w-px relative rounded-[4px] shrink-0 hover:border-[#484de6] focus-within:border-[#484de6] transition-colors">
-                  <div className="flex gap-8 items-center overflow-clip p-4 relative rounded-[inherit] w-full min-h-[60px]">
-                    <input
-                      type="text"
-                      value={item}
-                      onChange={(e) => handleArrayChange(index, e.target.value)}
-                      placeholder={`${itemPlaceholder} ${index + 1}...`}
-                      className="basis-0 font-['Helvetica_Neue:Regular',sans-serif] grow leading-normal min-h-[40px] min-w-px not-italic relative shrink-0 text-[#717680] text-[16px] tracking-[0.32px] outline-none focus:text-[#414651] transition-colors"
-                    />
-                    <div className="relative shrink-0 size-[20px] flex items-center">
-                      <button
-                        onClick={() => removeArrayItem(index)}
-                        className="text-gray-400 hover:text-red-500 hover:animate-rotate-360 transition-colors cursor-pointer"
-                      >
-                        <CircleX className="w-4 h-4" />
-                      </button>
+            {arrayValue.map((item, index) => {
+              const parsed = isResourceField && typeof item === 'string' ? parseResourceLink(item) : null;
+              const resourceTitle = parsed?.title ?? '';
+              const resourceUrl = parsed?.href ?? parsed?.displayUrl ?? '';
+              return (
+                <div key={index} className="flex gap-1 items-start w-full">
+                  <p className="font-['Helvetica_Neue:Medium',sans-serif] leading-normal not-italic relative shrink-0 text-[#999999] text-[14px] text-nowrap tracking-[0.28px] whitespace-pre mt-3">
+                    {index + 1}.
+                  </p>
+                  <div className="basis-0 bg-white border border-[#e6e6e6] border-solid grow min-h-px min-w-px relative rounded-[8px] shrink-0 hover:border-[#484de6] focus-within:border-[#484de6] transition-colors">
+                    <div className="flex flex-col gap-4 overflow-clip p-4 relative rounded-[inherit] w-full">
+                      {isResourceField ? (
+                        <>
+                          <div className="flex flex-col gap-2 w-full">
+                            <label className="text-sm font-medium text-[#414651]">Title</label>
+                            <input
+                              type="text"
+                              value={resourceTitle}
+                              onChange={(e) => handleResourceFieldChange(index, 'title', e.target.value)}
+                              placeholder="Resource title"
+                              className="font-['Helvetica_Neue:Regular',sans-serif] leading-normal min-h-[40px] text-[#717680] text-[16px] tracking-[0.32px] outline-none border border-[#e6e6e6] rounded-[6px] px-3 py-2 focus:border-[#484de6] transition-colors"
+                            />
+                          </div>
+                          <div className="flex flex-col gap-2 w-full">
+                            <label className="text-sm font-medium text-[#414651]">Link</label>
+                            <input
+                              type="url"
+                              value={resourceUrl}
+                              onChange={(e) => handleResourceFieldChange(index, 'url', e.target.value)}
+                              placeholder="https://example.com"
+                              className="font-['Helvetica_Neue:Regular',sans-serif] leading-normal min-h-[40px] text-[#717680] text-[16px] tracking-[0.32px] outline-none border border-[#e6e6e6] rounded-[6px] px-3 py-2 focus:border-[#484de6] transition-colors"
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex gap-8 items-center w-full min-h-[60px]">
+                          <input
+                            type="text"
+                            value={item}
+                            onChange={(e) => handleArrayChange(index, e.target.value)}
+                            placeholder={`${itemPlaceholder} ${index + 1}...`}
+                            className="basis-0 font-['Helvetica_Neue:Regular',sans-serif] grow leading-normal min-h-[40px] min-w-px text-[#717680] text-[16px] tracking-[0.32px] outline-none focus:text-[#414651] transition-colors"
+                          />
+                        </div>
+                      )}
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => removeArrayItem(index)}
+                          className="text-gray-400 hover:text-red-500 hover:animate-rotate-360 transition-colors cursor-pointer"
+                        >
+                          <CircleX className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             
             {/* Add Item Button */}
             <div className="flex gap-1 items-start pl-4 w-full">
@@ -131,6 +177,7 @@ export default function FormInput({
             </div>
           </div>
         );
+      }
 
       case 'rubric':
         const rubricData = Array.isArray(value) && Array.isArray(value[0]) ? value as string[][] : [];

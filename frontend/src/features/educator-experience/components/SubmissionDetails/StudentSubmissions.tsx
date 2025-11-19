@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { FileText } from 'lucide-react';
-import { SummaryCard, SubmissionsTable, SubmissionModal } from '../../../../shared/components/ui';
+import { SummaryCard, SubmissionsTable, SubmissionModal, StarRating } from '../../../../shared/components/ui';
 import type { StudentSubmission } from '../../types';
 
 interface StudentSubmissionsProps {
@@ -10,12 +10,14 @@ interface StudentSubmissionsProps {
   submissions: StudentSubmission[];
   onApproveSubmission: (submissionId: number) => void;
   onViewSubmission: (submissionId: number) => void;
+  avgClarityScore?: number | null;
 }
 
 export default function StudentSubmissions({ 
   submissions, 
   onApproveSubmission, 
-  onViewSubmission 
+  onViewSubmission,
+  avgClarityScore = null
 }: StudentSubmissionsProps) {
   const [selectedSubmission, setSelectedSubmission] = useState<StudentSubmission | null>(null);
 
@@ -23,7 +25,7 @@ export default function StudentSubmissions({
   const totalSubmissions = submissions.length;
   const passCount = submissions.filter(s => s.aiAssessment.overall === 'pass').length;
   const failCount = submissions.filter(s => s.aiAssessment.overall === 'fail').length;
-  const clarityScore = 5; // Mock clarity score
+  const clarityScore = typeof avgClarityScore === 'number' ? avgClarityScore : null;
 
   // Convert submissions to table format
   const tableSubmissions = submissions.map(submission => ({
@@ -76,12 +78,13 @@ export default function StudentSubmissions({
           value={totalSubmissions}
           type="total"
         />
-        <SummaryCard
-          title="Task Clarity"
-          value=""
-          type="clarity"
-          clarityStars={clarityScore}
-        />
+        <SummaryCard title="Task Clarity">
+          {clarityScore !== null ? (
+            <StarRating rating={Math.max(0, Math.min(5, clarityScore))} />
+          ) : (
+            <p className="text-sm text-gray-500">No clarity data</p>
+          )}
+        </SummaryCard>
         <SummaryCard
           title="Assessment Results"
           value=""

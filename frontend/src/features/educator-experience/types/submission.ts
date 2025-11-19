@@ -15,8 +15,10 @@ export interface AIAssessment {
 }
 
 export interface StudentSubmission {
-  id: number;
+  id: number; // Mapped ID for UI (idx + 1)
+  backendId?: string; // Actual backend submission ID (UUID)
   studentName: string;
+  studentAvatarUrl?: string;
   submissionDate: string;
   status: SubmissionStatus;
   aiAssessment: AIAssessment;

@@ -5,6 +5,7 @@ import StatusBadge from './StatusBadge';
 
 interface SubmissionRowProps {
   studentName: string;
+  studentAvatarUrl?: string;
   educatorAssessment: string;
   educatorGradingStatus?: string; // New field for educator grading status
   dateTime: string;
@@ -15,6 +16,7 @@ interface SubmissionRowProps {
 
 export default function SubmissionRow({
   studentName,
+  studentAvatarUrl,
   educatorAssessment,
   educatorGradingStatus,
   dateTime,
@@ -35,6 +37,15 @@ export default function SubmissionRow({
     >
       {/* Student Name */}
       <div className="basis-0 box-border content-stretch flex gap-[10px] grow items-center min-h-px min-w-px overflow-clip px-[16px] py-[32px] relative shrink-0">
+        {studentAvatarUrl && (
+          <div className="size-[24px] shrink-0 overflow-hidden rounded-full border border-[#484de6]">
+            <img
+              src={studentAvatarUrl}
+              alt={studentName}
+              className="size-full object-cover"
+            />
+          </div>
+        )}
         <p className="font-['Helvetica_Neue:Regular',sans-serif] leading-[normal] not-italic relative shrink-0 text-[#222222] text-[16px] text-nowrap tracking-[0.32px] whitespace-pre">
           {studentName}
         </p>

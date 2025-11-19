@@ -1,6 +1,6 @@
 'use client';
 
-import { CircleX } from 'lucide-react';
+import CloseButton from '@/shared/components/ui/CloseButton';
 
 export default function HintsModal({
   isOpen,
@@ -21,9 +21,7 @@ export default function HintsModal({
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl border border-gray-200">
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between rounded-t-2xl">
           <h2 className="text-lg font-semibold text-gray-900">Hens Hints</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100">
-            <CircleX className="w-5 h-5" />
-          </button>
+          <CloseButton onClick={onClose} size="sm" />
         </div>
         <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
           {Array.isArray(hints) && hints.length > 0 && (
@@ -55,7 +53,7 @@ export default function HintsModal({
           )}
         </div>
         <div className="px-6 py-4 border-t border-gray-200 flex justify-end rounded-b-2xl">
-          <button onClick={onClose} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Close</button>
+          <button onClick={onClose} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer">Close</button>
         </div>
       </div>
     </div>

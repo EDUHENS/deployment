@@ -11,7 +11,15 @@ import type {
   EducatorSubmissionsMap,
   ApprovedGradesMap
 } from '../../types';
-import { CheckCircle2, XCircle, Eye, Save, Calendar, Copy, Share } from 'lucide-react';
+import {
+  CheckCircle2,
+  XCircle,
+  ClipboardCheck,
+  ArrowLeft,
+  Save,
+  Calendar
+} from 'lucide-react';
+import { EyeIcon, CopyIcon, ShareIcon } from '@/shared/components/ui';
 
 // TODO(db): Drive `submissions`, `educatorSubmissions`, and `approvedGrades` from API.
 // - Fetch per-task submissions on selection
@@ -37,6 +45,11 @@ interface OngoingTasksProps {
   showTaskLink?: boolean;
   taskLink?: string | null;
   modifyLoading?: boolean;
+  onCloseTask?: () => void;
+  onBackToMain?: () => void; // Handler to return to main screen
+  publishLabel?: string;
+  onNotify?: (message: string, kind?: 'info' | 'success' | 'error') => void;
+  avgClarityScore?: number | null;
 }
 
 export default function OngoingTasks({
@@ -58,8 +71,35 @@ export default function OngoingTasks({
   hideSubmissionsPanel = false,
   showTaskLink = false,
   taskLink = null,
-  modifyLoading = false
+  modifyLoading = false,
+  onCloseTask,
+  onBackToMain,
+  publishLabel,
+  onNotify,
+  avgClarityScore
 }: OngoingTasksProps) {
+  const handleCopyLink = async (event: React.MouseEvent, message = 'Link copied') => {
+    event.stopPropagation();
+    if (!taskLink) return;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(taskLink);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = taskLink;
+        textArea.style.position = 'fixed';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+      onNotify?.(message, 'info');
+    } catch (error) {
+      console.error('Failed to copy task link', error);
+      onNotify?.('Could not copy the link. Please try again.', 'error');
+    }
+  };
   const tableSubmissions = submissions.map((submission) => {
     const educatorSubmission = educatorSubmissions?.[submission.id];
     const isApproved = approvedGrades?.[submission.id];
@@ -73,6 +113,7 @@ export default function OngoingTasks({
       status: submission.status,
       date: submission.submissionDate,
       studentName: submission.studentName,
+      studentAvatarUrl: (submission as any).studentAvatarUrl,
       educatorAssessment: educatorSubmission?.grade ?? 'Pending',
       educatorGradingStatus,
       dateTime: submission.submissionDate,
@@ -195,84 +236,105 @@ export default function OngoingTasks({
     <Layout3
       header={
         <Header
-          title={hideSubmissionsPanel ? 'Task Lab' : ''}
-          subtitle={hideSubmissionsPanel ? 'Create New Task' : 'Review and Manage Task'}
+          title=""
+          subtitle=""
           taskTitle={taskTitle}
           scheduledStart={scheduledStart}
           scheduledEnd={scheduledEnd}
+          leftContent={onBackToMain ? (
+            <button
+              onClick={onBackToMain}
+              className="bg-white border border-[#cccccc] border-solid box-border content-stretch flex gap-[7px] items-center justify-center overflow-visible px-[16px] py-[12px] relative rounded-[4px] shrink-0 hover:bg-gray-50 hover:border-[#999999] transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-3 h-3 text-[#595959] fill-current" />
+              <span className="font-['Helvetica_Neue:Regular', sans-serif] leading-[normal] not-italic relative shrink-0 text-[#595959] text-[14px] text-nowrap whitespace-pre">
+                Back
+              </span>
+            </button>
+          ) : undefined}
           actions={
             <>
               {/* Preview Button */}
               <button 
                 onClick={onPreview}
                 className="bg-white border border-[#cccccc] border-solid box-border content-stretch flex gap-[7px] items-center justify-center max-w-[160px] overflow-visible px-[16px] py-[12px] relative rounded-[4px] shrink-0 w-[160px] hover:bg-gray-50 hover:border-[#999999] transition-colors cursor-pointer">
-                <Eye className="w-3 h-3 text-[#595959]" />
                 <span className="font-['Helvetica_Neue:Regular', sans-serif] leading-[normal] not-italic relative shrink-0 text-[#595959] text-[14px] text-nowrap whitespace-pre">
                   Preview
                 </span>
+                <EyeIcon className="w-[18px] h-[18px] text-[#595959]" />
               </button>
               
               {/* Save Draft Button */}
               <button 
                 onClick={onSaveDraft}
                 className="bg-white border border-[#cccccc] border-solid box-border content-stretch flex gap-[8px] items-center justify-center max-w-[160px] overflow-visible px-[16px] py-[12px] relative rounded-[4px] shrink-0 w-[160px] hover:bg-gray-50 hover:border-[#999999] transition-colors cursor-pointer">
-                <Save className="w-3 h-3 text-[#595959]" />
                 <span className="font-['Helvetica_Neue:Regular', sans-serif] leading-[normal] not-italic relative shrink-0 text-[#595959] text-[14px] text-nowrap whitespace-pre">
                   Save Draft
                 </span>
+                <Save className="w-[14px] h-[14px] text-[#595959]" />
               </button>
               
               {/* Task Schedule Button */}
               <button 
                 onClick={onTaskSchedule}
                 className="bg-white border border-[#cccccc] border-solid box-border content-stretch flex gap-[7px] items-center justify-center max-w-[180px] overflow-visible px-[16px] py-[12px] relative rounded-[4px] shrink-0 w-[180px] hover:bg-gray-50 hover:border-[#999999] transition-colors cursor-pointer">
-                <Calendar className="w-3 h-3 text-[#595959]" />
                 <span className="font-['Helvetica_Neue:Regular', sans-serif] leading-[normal] not-italic relative shrink-0 text-[#595959] text-[14px] text-nowrap whitespace-pre">
                   Task Schedule
                 </span>
+                <Calendar className="w-[14px] h-[14px] text-[#595959]" />
               </button>
               
               {/* TaskLink Section (hidden for drafts / when showTaskLink=false) */}
               {showTaskLink && taskLink && (
-                <div className="bg-white border border-[#cccccc] border-solid box-border content-stretch flex gap-[8px] items-center justify-between max-w-[200px] overflow-visible px-[16px] py-[12px] relative rounded-[4px] shrink-0 w-[200px]">
-                  <a
-                    href={taskLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-['Helvetica_Neue:Regular', sans-serif] leading-[normal] not-italic relative shrink-0 text-[#484de6] text-[14px] text-nowrap whitespace-pre underline cursor-pointer"
-                    title={taskLink}
+                <div className="bg-white border border-[#cccccc] rounded-[4px] flex items-center justify-between gap-6 px-[16px] py-[8px] shrink-0">
+                  <button
+                    type="button"
+                    onClick={(e) => handleCopyLink(e)}
+                    className="font-['Helvetica_Neue:Regular', sans-serif] text-[14px] leading-[1.5] text-[#484de6] underline cursor-pointer whitespace-nowrap hover:text-[#2f35c4] transition-colors"
+                    title="Copy task link"
                   >
-                    Task Link
-                  </a>
-                  <div className="flex gap-[8px] items-center">
+                    TaskLink
+                  </button>
+                  <div className="flex items-center gap-6">
                     <button
+                      type="button"
                       title="Copy link"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (navigator?.clipboard?.writeText) {
-                          navigator.clipboard.writeText(taskLink).then(() => alert('Link copied')); 
-                        } else {
-                          void (async () => { alert(taskLink); })();
-                        }
-                      }}
+                      className="w-5 h-5 text-[#999999] transition-all duration-200 cursor-pointer hover:text-[#484de6] hover:-translate-y-0.5 hover:scale-110 focus:-translate-y-0.5"
+                      onClick={(e) => handleCopyLink(e)}
                     >
-                      <Copy className="w-3 h-3 text-[#595959] cursor-pointer hover:text-[#333333] transition-colors" />
+                      <CopyIcon className="w-full h-full" />
                     </button>
                     <button
+                      type="button"
                       title="Share"
+                      className="w-5 h-5 text-[#999999] transition-all duration-200 cursor-pointer hover:text-[#484de6] hover:-translate-y-0.5 hover:scale-110 focus:-translate-y-0.5"
                       onClick={(e) => {
                         e.stopPropagation();
                         if (navigator?.share) {
-                          navigator.share({ url: taskLink, title: 'Task Link' }).catch(() => {});
+                          navigator
+                            .share({ url: taskLink, title: 'Task Link' })
+                            .catch(() => {});
                         } else {
                           window.open(taskLink, '_blank');
                         }
                       }}
                     >
-                      <Share className="w-3 h-3 text-[#595959] cursor-pointer hover:text-[#333333] transition-colors" />
+                      <ShareIcon className="w-full h-full" />
                     </button>
                   </div>
                 </div>
+              )}
+              
+              {/* Close Task Button */}
+              {onCloseTask && (
+                <button 
+                  onClick={onCloseTask}
+                  className="bg-[#e5e7eb] border border-[#d1d5db] border-solid box-border content-stretch flex gap-[7px] items-center justify-center max-w-[160px] overflow-visible px-[16px] py-[12px] relative rounded-[4px] shrink-0 w-[160px] hover:bg-[#d1d5db] hover:border-[#9ca3af] transition-colors cursor-pointer">
+                  <ClipboardCheck className="w-4 h-4 text-[#6b7280]" />
+                  <span className="font-['Helvetica_Neue:Regular', sans-serif] leading-[normal] not-italic relative shrink-0 text-[#6b7280] text-[14px] text-nowrap whitespace-pre">
+                    Close Task
+                  </span>
+                </button>
               )}
             </>
           }
@@ -290,12 +352,13 @@ export default function OngoingTasks({
           </div>
           
           {/* Bottom Input Bar - Fixed at bottom */}
-          <div className="absolute bottom-0 left-0 right-0 z-50 w-full">
+          <div className="absolute bottom-6 left-0 right-0 z-50 w-full">
             <BottomInputBar
               onPublish={() => onPublishTask(taskFormData)}
               onModify={onModifyTask}
               isLoading={modifyLoading}
               placeholder="Hens can modify it for you"
+              publishLabel={publishLabel}
             />
           </div>
         </div>
@@ -336,7 +399,7 @@ export default function OngoingTasks({
               textColor="text-[#f15a24]"
             >
               <div className="content-stretch flex gap-[8px] items-center relative shrink-0">
-                <StarRating rating={5} />
+                <StarRating rating={avgClarityScore ? Math.round(avgClarityScore) : 0} />
               </div>
             </SummaryCard>
             <SummaryCard

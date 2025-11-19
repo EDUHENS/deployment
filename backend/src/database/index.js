@@ -2,27 +2,65 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-const pool = new Pool({
-  user: process.env.DB_USER|| 'postgres',
-  host: process.env.DB_HOST || 'localhost',
-  database: process.env.DB_NAME || 'Eduhens',
-  password: process.env.DB_PASSWORD,
-  port: process.env.DB_PORT|| 5432,
-  ssl: false
-});
+// Use DATABASE_URL if provided (Supabase connection string), otherwise use individual env vars
+// Handle connection pooler issues with timeout and retry
+const poolConfig = process.env.DATABASE_URL
+  ? {
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.DATABASE_URL.includes('supabase.com') || process.env.DATABASE_URL.includes('pooler.supabase.com') 
+        ? { rejectUnauthorized: false } 
+        : false,
+      connectionTimeoutMillis: 10000, // 10 second timeout
+      idleTimeoutMillis: 30000,
+      max: 20, // Maximum number of clients in the pool
+    }
+  : {
+      user: process.env.DB_USER || 'postgres',
+      host: process.env.DB_HOST || 'localhost',
+      database: process.env.DB_NAME || 'Eduhens',
+      password: process.env.DB_PASSWORD,
+      port: process.env.DB_PORT || 5432,
+      ssl: process.env.DB_HOST?.includes('supabase.com') ? { rejectUnauthorized: false } : false,
+      connectionTimeoutMillis: 10000,
+      idleTimeoutMillis: 30000,
+      max: 20,
+    };
 
-// test connect
-const connectDB = async () => {
-  try {
-    const client = await pool.connect();
-    const res = await client.query('SELECT current_database(), now()');
-    console.log('Connected to database:', res.rows[0]);
-    client.release();
-    return true;
-  } catch (error) {
-    console.error('Database connection error:', error);
-    return false;
+const pool = new Pool(poolConfig);
+
+// test connect with retry logic and better error handling
+const connectDB = async (retries = 3) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const client = await pool.connect();
+      const res = await client.query('SELECT current_database(), current_user, inet_server_addr() as host, now()');
+      const dbInfo = res.rows[0];
+      const isSupabase = dbInfo.host && (dbInfo.host.includes('supabase') || dbInfo.host.includes('aws-'));
+      console.log(`✅ Connected to database: ${dbInfo.current_database} (${isSupabase ? 'Supabase' : 'Local'})`);
+      console.log(`   Host: ${dbInfo.host || 'localhost'}, User: ${dbInfo.current_user}`);
+      client.release();
+      return true;
+    } catch (error) {
+      console.error(`❌ Database connection error (attempt ${i + 1}/${retries}):`, error.message);
+      if (error.message.includes('ENOTFOUND') || error.message.includes('getaddrinfo')) {
+        console.error(`   DNS resolution failed for database host`);
+        if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('pooler')) {
+          console.error('💡 Tip: If using Supabase pooler and getting DNS errors, try:');
+          console.error('   1. Check your DATABASE_URL is correct');
+          console.error('   2. Try using direct connection URL (remove .pooler from hostname)');
+          console.error('   3. Verify network connectivity to Supabase');
+        }
+      }
+      if (i < retries - 1) {
+        console.log(`   Retrying in 2 seconds...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } else {
+        console.error('❌ Database connection failed after all retries');
+        return false;
+      }
+    }
   }
+  return false;
 };
 
 // User Model
@@ -53,14 +91,18 @@ const userModel = {
     }
   },
 
-  async updateUserProfile(userId, { first_name, last_name, picture }) {
+  async updateUserProfile(userId, { name, picture } = {}) {
     try {
       const fields = [];
       const values = [];
       let idx = 1;
-      if (typeof first_name === 'string') { fields.push(`first_name = $${idx++}`); values.push(first_name); }
-      if (typeof last_name === 'string')  { fields.push(`last_name  = $${idx++}`); values.push(last_name); }
-      if (typeof picture === 'string')    { fields.push(`picture    = $${idx++}`); values.push(picture); }
+      const pushField = (column, value) => {
+        if (value === undefined) return;
+        fields.push(`${column} = $${idx++}`);
+        values.push(value);
+      };
+      pushField('name', name);
+      pushField('picture', picture);
       if (fields.length === 0) return await this.findById(userId);
       const sql = `UPDATE users SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${idx} RETURNING *`;
       values.push(userId);
@@ -88,12 +130,13 @@ const userModel = {
 
   async createTraditionalUser(userData) {
     const { email, passwordHash, firstName, lastName, phoneNumber } = userData;
+    const displayName = [firstName, lastName].filter(Boolean).join(' ').trim();
     try {
       const result = await pool.query(
-        `INSERT INTO users (email, password_hash, first_name, last_name, phone_number, auth0_provider) 
-         VALUES ($1, $2, $3, $4, $5, 'traditional') 
-         RETURNING id, email, first_name, last_name, email_verified, created_at`,
-        [email, passwordHash, firstName, lastName, phoneNumber]
+        `INSERT INTO users (email, password_hash, name, phone_number, auth0_provider) 
+         VALUES ($1, $2, $3, $4, 'traditional') 
+         RETURNING id, email, name, email_verified, created_at`,
+        [email, passwordHash, displayName || email, phoneNumber]
       );
       return result.rows[0];
     } catch (error) {
@@ -111,10 +154,22 @@ const userModel = {
       given_name, 
       family_name, 
       picture,
-      nickname 
+      nickname,
+      name,
+      full_name: fullName
     } = auth0User;
     
-    console.log('Debug: get Auth0 data:', { given_name, family_name, nickname,email }); 
+    const displayName = (
+      name ||
+      fullName ||
+      [given_name, family_name].filter(Boolean).join(' ') ||
+      nickname ||
+      email ||
+      'User'
+    ).toString().trim();
+    const normalizedDisplayName = displayName.length ? displayName : 'User';
+    
+    console.log('Debug: get Auth0 data:', { name, fullName, given_name, family_name, nickname, email }); 
     
     try {
       const existingUser = await this.findByAuth0Id(auth0Id);
@@ -124,17 +179,15 @@ const userModel = {
            SET 
              email = $1,
              email_verified = $2,
-             first_name = CASE WHEN first_name IS NULL OR first_name = '' THEN $3 ELSE first_name END,
-             last_name  = CASE WHEN last_name  IS NULL OR last_name  = '' THEN $4 ELSE last_name  END,
-             picture = $5,
+             name = CASE WHEN name IS NULL OR name = '' THEN $3 ELSE name END,
+             picture = CASE WHEN picture IS NULL OR picture = '' THEN $4 ELSE picture END,
              updated_at = CURRENT_TIMESTAMP
-           WHERE auth0_id = $6 
+           WHERE auth0_id = $5 
            RETURNING *`,
           [
             email,
             email_verified,
-            given_name || nickname || '',
-            family_name || '',
+            normalizedDisplayName,
             picture,
             auth0Id,
           ]
@@ -148,10 +201,13 @@ const userModel = {
         // if we have email at db, update
         const result = await pool.query(
           `UPDATE users 
-           SET auth0_id = $1, auth0_provider = $2, email_verified = $3, picture = $4, updated_at = CURRENT_TIMESTAMP
-           WHERE email = $5 
+           SET auth0_id = $1, auth0_provider = $2, email_verified = $3,
+               picture = CASE WHEN picture IS NULL OR picture = '' THEN $4 ELSE picture END,
+               name = CASE WHEN name IS NULL OR name = '' THEN $5 ELSE name END,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE email = $6 
            RETURNING *`,
-          [auth0Id, this.extractProvider(auth0Id), email_verified, picture, email]
+          [auth0Id, this.extractProvider(auth0Id), email_verified, picture, normalizedDisplayName, email]
         );
         return result.rows[0];
       }
@@ -159,15 +215,14 @@ const userModel = {
       // create new user 
       const result = await pool.query(
         `INSERT INTO users (
-          email, email_verified, first_name, last_name, picture, 
+          email, email_verified, name, picture, 
           auth0_id, auth0_provider, phone_number
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, '')
+        ) VALUES ($1, $2, $3, $4, $5, $6, '')
         RETURNING *`,
         [
           email, 
           email_verified, 
-          given_name || nickname || '',  
-          family_name || '',    
+          normalizedDisplayName,  
           picture,
           auth0Id,
           this.extractProvider(auth0Id)
@@ -289,7 +344,7 @@ const userModel = {
   async listUsersWithRoles(limit = 200, offset = 0) {
     try {
       const result = await pool.query(
-        `SELECT u.id, u.email, u.first_name, u.last_name, u.picture, u.email_verified, u.created_at,
+        `SELECT u.id, u.email, u.name, u.picture, u.email_verified, u.created_at,
                 COALESCE(json_agg(ur.role) FILTER (WHERE ur.role IS NOT NULL), '[]') AS roles
          FROM users u
          LEFT JOIN user_roles ur ON ur.user_id = u.id

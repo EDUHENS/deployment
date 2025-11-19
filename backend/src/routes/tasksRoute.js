@@ -111,16 +111,18 @@ module.exports = (requireAuth) => {
       const { taskFields, sections } = mapAiTaskToDb(ai_task);
 
       await client.query('BEGIN');
+      // Generate share_slug immediately when creating draft so link is available
+      const shareSlug = await mintShareSlug();
       const ins = await client.query(
         `INSERT INTO tasks (
            teacher_id, task_title, objective, duration, level, academic_integrity,
            grading_rubric, ai_generated, ai_guidelines,
-           opens_at, due_at, status, share_enabled, study_link, access_code
+           opens_at, due_at, status, share_enabled, share_slug, study_link, access_code
          ) VALUES (
            $1,$2,$3,$4,$5,$6,
            $7, COALESCE($8, true), $9,
-           $10,$11, 'draft', false, $12, $13
-         ) RETURNING id`,
+           $10,$11, 'draft', false, $14, $12, $13
+         ) RETURNING id, share_slug`,
         [
           teacherId,
           taskFields.task_title,
@@ -134,10 +136,12 @@ module.exports = (requireAuth) => {
           opens_at || null,
           due_at || null,
           study_link || null,
-          access_code || null
+          access_code || null,
+          shareSlug
         ]
       );
       const taskId = ins.rows[0].id;
+      const slug = ins.rows[0].share_slug;
 
       for (const s of sections) {
         await client.query(
@@ -148,8 +152,10 @@ module.exports = (requireAuth) => {
       }
 
       await client.query('COMMIT');
-      console.log(`[DB] Task created: "${taskFields.task_title}" (${taskId})`);
-      return res.json({ ok: true, task_id: taskId, status: 'draft' });
+      const base = process.env.APP_BASE_URL || process.env.AUTH0_BASE_URL || 'http://localhost:3000';
+      const link = slug ? `${base}/t/${slug}` : null;
+      console.log(`[DB] Task created: "${taskFields.task_title}" (${taskId})${link ? `, link=${link}` : ''}`);
+      return res.json({ ok: true, task_id: taskId, status: 'draft', link });
     } catch (e) {
       await pool.query('ROLLBACK');
       console.error('Create draft error:', e);
@@ -410,12 +416,37 @@ module.exports = (requireAuth) => {
          ORDER BY updated_at DESC`,
         [teacherId]
       );
-      const base = process.env.APP_BASE_URL || process.env.AUTH0_BASE_URL || 'http://localhost:3000';
-      const tasks = r.rows.map((row) => ({
-        ...row,
-        link: row.share_slug ? `${base}/t/${row.share_slug}` : null,
+      
+      // For each task, get submission count and average clarity score
+      const tasksWithStats = await Promise.all(r.rows.map(async (row) => {
+        // Get submission count
+        const subCount = await pool.query(
+          `SELECT COUNT(*) as count FROM submissions WHERE task_id = $1`,
+          [row.id]
+        );
+        const submissionCount = parseInt(subCount.rows[0]?.count || '0', 10);
+        
+        // Get average clarity score
+        const clarityAvg = await pool.query(
+          `SELECT AVG(clarity_score)::numeric(10,2) as avg_clarity
+           FROM submissions
+           WHERE task_id = $1 AND clarity_score IS NOT NULL`,
+          [row.id]
+        );
+        const avgClarity = clarityAvg.rows[0]?.avg_clarity 
+          ? parseFloat(clarityAvg.rows[0].avg_clarity) 
+          : null;
+        
+        const base = process.env.APP_BASE_URL || process.env.AUTH0_BASE_URL || 'http://localhost:3000';
+        return {
+          ...row,
+          link: row.share_slug ? `${base}/t/${row.share_slug}` : null,
+          submission_count: submissionCount,
+          avg_clarity_score: avgClarity,
+        };
       }));
-      return res.json({ ok: true, tasks });
+      
+      return res.json({ ok: true, tasks: tasksWithStats });
     } catch (e) {
       console.error('List tasks error:', e);
       return res.status(500).json({ ok: false, error: 'failed to list tasks' });
@@ -431,7 +462,7 @@ module.exports = (requireAuth) => {
       if (t.rowCount === 0) return res.status(404).json({ ok: false, error: 'task not found' });
 
       const r = await pool.query(
-        `SELECT e.user_id, u.first_name, u.last_name, u.email, u.picture, e.enrolled_at
+        `SELECT e.user_id, u.name, u.email, u.picture, e.enrolled_at
            FROM task_enrollments e
            JOIN users u ON u.id = e.user_id
           WHERE e.task_id = $1
@@ -455,14 +486,23 @@ module.exports = (requireAuth) => {
 
       const r = await pool.query(
         `SELECT s.id, s.status, s.submitted_at, s.graded_at, s.ai_score, s.ai_feedback,
-                s.educator_score, s.educator_feedback, s.notes,
-                u.first_name, u.last_name, u.email, u.picture
+                s.educator_score, s.educator_feedback, s.notes, s.clarity_score,
+                u.name, u.email, u.picture
            FROM submissions s
            JOIN users u ON u.id = s.student_id
           WHERE s.task_id = $1
           ORDER BY COALESCE(s.submitted_at, s.created_at) DESC`,
         [id]
       );
+
+      // Calculate average clarity score for this task
+      const clarityAvg = await pool.query(
+        `SELECT AVG(clarity_score)::numeric(10,2) as avg_clarity
+           FROM submissions
+          WHERE task_id = $1 AND clarity_score IS NOT NULL`,
+        [id]
+      );
+      const avgClarity = clarityAvg.rows[0]?.avg_clarity ? parseFloat(clarityAvg.rows[0].avg_clarity) : null;
 
       // Optionally, fetch assets per submission
       const ids = r.rows.map(row => row.id);
@@ -490,16 +530,16 @@ module.exports = (requireAuth) => {
         educator_score: row.educator_score,
         educator_feedback: row.educator_feedback,
         notes: row.notes,
+        clarity_score: row.clarity_score,
         student: {
-          first_name: row.first_name,
-          last_name: row.last_name,
+          name: row.name,
           email: row.email,
           picture: row.picture,
         },
         assets: assetsBySubmission[row.id] || [],
       }));
 
-      return res.json({ ok: true, submissions });
+      return res.json({ ok: true, submissions, avg_clarity_score: avgClarity });
     } catch (e) {
       console.error('List submissions error:', e);
       return res.status(500).json({ ok: false, error: 'failed to list submissions' });

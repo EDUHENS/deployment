@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { CircleX } from 'lucide-react';
+import CloseButton from '@/shared/components/ui/CloseButton';
 
 interface DraftSavedModalProps {
   isOpen: boolean;
@@ -17,12 +17,7 @@ export default function DraftSavedModal({ isOpen, onClose, onKeepEditing, onStar
     <div className="fixed inset-0 bg-black/10 backdrop-blur-sm flex items-center justify-center z-50 py-[100px]">
       <div className="bg-[#f8f8f8] border-4 border-[#cccccc] border-solid relative rounded-[32px] w-[90vw] h-[calc(100vh-400px)] max-w-4xl flex flex-col overflow-hidden">
         {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute right-4 top-4 z-10 text-gray-400 hover:text-gray-600 hover:animate-rotate-360 transition-colors duration-200 cursor-pointer"
-        >
-          <CircleX className="w-6 h-6" />
-        </button>
+        <CloseButton onClick={onClose} className="absolute right-4 top-4 z-10" size="sm" />
 
         {/* Content */}
         <div className="flex flex-col gap-[72px] items-center justify-center flex-1 pb-[70px] pl-[160px] pr-[165px] pt-[80px]">

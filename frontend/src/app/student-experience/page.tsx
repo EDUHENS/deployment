@@ -1,7 +1,7 @@
 // src/app/student-experience/page.tsx
-// Reason: Provide a protected Student dashboard route using mock data.
+// Reason: Provide a protected Student dashboard route backed by live data.
 // - Redirect unauthenticated users to the local login UI ("/") with returnTo
-// - Render StudentDashboard which already reads mock data via useStudentTasks
+// - Render StudentDashboard which calls the real API via useStudentTasks
 
 'use client';
 

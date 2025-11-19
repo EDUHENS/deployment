@@ -27,19 +27,10 @@ function HomeContent() {
   }, []);
 
   // If user is authenticated, redirect to dashboard
+  // User data comes from Auth0/backend, no need to store in sessionStorage
   useEffect(() => {
     if (isLoading || !user) return;
-    try {
-      const payload = {
-        sub: user.sub,
-        email: user.email,
-        name: user.name,
-        picture: user.picture,
-      };
-      sessionStorage.setItem('eduhens.user', JSON.stringify(payload));
-    } catch {
-      // ignore storage errors
-    }
+    // User data is available from Auth0 hook and backend API
     router.replace(normalizedReturnTo);
   }, [isLoading, user, normalizedReturnTo, router]);
 

@@ -8,7 +8,6 @@
 // CHANGED: Render the educator landing view on entry
 // Aligns with src/App.tsx (Sidebar tasks + centered input)
 import React, { useEffect, useMemo, useState } from 'react';
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { MainLayout, Layout1 } from '@/shared/components/layout'; // CHANGED
 import { AInputBox } from '@/shared/components/forms'; // CHANGED
@@ -20,10 +19,19 @@ import PreviewModal from '@/features/educator-experience/components/TaskCreation
 import PublishConfirmModal from '@/features/educator-experience/components/TaskCreation/PublishConfirmModal';
 import SubmissionDetailsModal from '@/features/educator-experience/components/SubmissionDetails/SubmissionDetailsModal';
 import TaskScheduleModal from '@/features/educator-experience/components/TaskCreation/TaskScheduleModal';
+import TaskCreationSlogan from '@/features/educator-experience/components/TaskCreation/TaskCreationSlogan';
 import { ensureRole, getMe } from '@/services/authApi';
 import { generateAITask, convertAITaskToFormData, convertFormDataToAiTask } from '@/services/aiTaskCreation';
-import { createDraft, replaceSections, updateTaskMain, publishTask, listTasks, TaskListItem, getTaskForm, getTaskEnrollments, getTaskSubmissions } from '@/services/taskApi';
+import { createDraft, replaceSections, updateTaskMain, publishTask, closeTask, listTasks, TaskListItem, getTaskForm, getTaskEnrollments, getTaskSubmissions, gradeSubmission } from '@/services/taskApi';
 import SimpleToast from '@/shared/components/ui/SimpleToast';
+
+const getDisplayName = (user: any) => {
+  if (!user) return null; // Return null instead of 'User' - let UI handle empty state
+  const rawFull = (user.full_name || user.name)?.toString().trim();
+  if (rawFull) return rawFull;
+  // Return email if available, otherwise null - UI should handle display
+  return user.email || null;
+};
 
 export default function EducatorDashboard() {
   // CHANGED: Sidebar/UI state, mirrors App.tsx usage
@@ -36,9 +44,10 @@ export default function EducatorDashboard() {
 
   // CHANGED: Data required by OngoingTasks
   const [submissions, setSubmissions] = useState<StudentSubmission[]>([]);
+  const [avgClarityScore, setAvgClarityScore] = useState<number | null>(null);
   const [taskFormData, setTaskFormData] = useState<TaskFormData>(defaultTaskFormData);
-  const [educatorSubmissions] = useState<EducatorSubmissionsMap>({});
-  const [approvedGrades] = useState<ApprovedGradesMap>({});
+  const [educatorSubmissions, setEducatorSubmissions] = useState<EducatorSubmissionsMap>({});
+  const [approvedGrades, setApprovedGrades] = useState<ApprovedGradesMap>({});
   const [userProfile, setUserProfile] = useState<{ name: string; avatar?: string; role?: string }>();
   const [formKey, setFormKey] = useState(0);
   const [showSchedule, setShowSchedule] = useState(false);
@@ -57,6 +66,11 @@ export default function EducatorDashboard() {
   const [taskLink, setTaskLink] = useState<string | null>(null);
   const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL as string) || 'http://localhost:5001';
   const [toast, setToast] = useState<{ message: string; kind?: 'info' | 'success' | 'error'; position?: 'top-right' | 'center' } | null>(null);
+  
+  // Helper function to show toast notifications
+  const onNotify = (message: string, kind?: 'info' | 'success' | 'error') => {
+    setToast({ message, kind });
+  };
   const [isModifying, setIsModifying] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
@@ -70,7 +84,13 @@ export default function EducatorDashboard() {
   const router = useRouter();
 
   const [dbSidebarTasks, setDbSidebarTasks] = useState<Task[]>([]);
+  const [isSidebarLoading, setIsSidebarLoading] = useState(true);
   const allTasks = useMemo(() => dbSidebarTasks, [dbSidebarTasks]);
+  const publishButtonLabel = useMemo(() => {
+    if (selectedTask?.isArchived) return 'Reopen Task';
+    if (selectedTask?.isDraft || !dbTaskId) return 'Publish Task';
+    return 'Publish Changes';
+  }, [selectedTask, dbTaskId]);
 
   function parseAiFeedbackRaw(raw: any): { overall?: 'pass' | 'fail'; summary?: string; criteria?: Array<any>; details: string[] } {
     const details: string[] = [];
@@ -141,6 +161,7 @@ export default function EducatorDashboard() {
     try {
       setSelectedTask(task);
       setShowingLayout3(true);
+      setAvgClarityScore(null); // Reset clarity score when switching tasks
       // Ensure form components remount to avoid stale internal state
       setFormKey((k) => k + 1);
       const isDbId = typeof task.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(task.id as any);
@@ -161,20 +182,37 @@ export default function EducatorDashboard() {
         setDbTaskId(taskId);
         setShowTaskLink(Boolean(r.task?.link));
         setTaskLink(r.task?.link || null);
+        
+        // Load schedule from database
+        if (r.task?.opens_at) {
+          setScheduledStart(new Date(r.task.opens_at));
+        } else {
+          setScheduledStart(null);
+        }
         if (r.task?.due_at) {
           const end = new Date(r.task.due_at);
+          setScheduledEnd(end);
           const days = Math.max(0, Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-          setSelectedTask((prev) => (prev ? { ...prev, dueDate: days } : prev));
+          setSelectedTask((prev) => (prev ? { ...prev, dueDate: days, dueAt: end.toISOString() } : prev));
+        } else {
+          setScheduledEnd(null);
         }
       }
 
       try {
         const sub = await getTaskSubmissions(taskId);
+        // Capture average clarity score from API response
+        if (sub?.avg_clarity_score !== undefined) {
+          setAvgClarityScore(sub.avg_clarity_score);
+        }
         if (sub?.ok && Array.isArray(sub.submissions) && sub.submissions.length > 0) {
+          const newEducatorSubmissions: EducatorSubmissionsMap = {};
+          const newApprovedGrades: ApprovedGradesMap = {};
+          
           const mapped = sub.submissions.map((s: any, idx: number) => {
             const studentName =
-              [s.student?.first_name, s.student?.last_name].filter(Boolean).join(' ') ||
-              (s.student?.email || 'Student');
+              (s.student?.name ?? '').toString().trim() ||
+              (s.student?.email || null);
             const parsed = parseAiFeedbackRaw(s.ai_feedback);
             const aiOverall =
               typeof s.ai_score === 'number'
@@ -198,9 +236,27 @@ export default function EducatorDashboard() {
                 href,
               };
             });
+            
+            // Build educator submissions map from backend data
+            const submissionId = idx + 1; // Use mapped ID
+            if (s.educator_score !== null && s.educator_score !== undefined) {
+              const grade = s.educator_score >= 60 ? 'pass' : 'fail';
+              newEducatorSubmissions[submissionId] = {
+                grade: grade as 'pass' | 'fail',
+                feedback: s.educator_feedback || '',
+                submittedAt: s.graded_at ? new Date(s.graded_at) : new Date(),
+              };
+              // If status is 'graded', mark as approved
+              if (s.status === 'graded') {
+                newApprovedGrades[submissionId] = true;
+              }
+            }
+            
             return {
-              id: idx + 1,
+              id: submissionId,
+              backendId: s.id, // Store actual backend ID
               studentName,
+              studentAvatarUrl: s.student?.picture || undefined,
               submissionDate: new Date(s.submitted_at || s.graded_at || Date.now()).toISOString(),
               status: (s.status || 'pending') as any,
               aiAssessment: { overall: aiOverall as any, details },
@@ -209,13 +265,19 @@ export default function EducatorDashboard() {
             } as StudentSubmission;
           });
           setSubmissions(mapped);
+          setEducatorSubmissions(newEducatorSubmissions);
+          setApprovedGrades(newApprovedGrades);
+          // Reset clarity score if no submissions
+          if (mapped.length === 0) {
+            setAvgClarityScore(null);
+          }
         } else {
           const enr = await getTaskEnrollments(taskId);
+          setAvgClarityScore(null);
           if (enr?.ok && Array.isArray(enr.enrollments)) {
-            const mapped = enr.enrollments.map((e, idx) => ({
+              const mapped = enr.enrollments.map((e, idx) => ({
               id: idx + 1,
-              studentName:
-                [e.first_name, e.last_name].filter(Boolean).join(' ') || (e.email || 'Student'),
+              studentName: (e.name ?? '').toString().trim() || (e.email || null),
               submissionDate: new Date(e.enrolled_at).toISOString(),
               status: 'pending' as const,
               aiAssessment: { overall: 'pending' as any, details: [] },
@@ -249,11 +311,12 @@ export default function EducatorDashboard() {
         setFormKey((k) => k + 1); // force a clean form mount (avoid mixing previous rubric)
         setTaskFormData(form);
         // Ensure layout 3 has a selected task context
-        const title = form.title || 'New Task';
+        const title = form.title || null;
         const placeholderTask = {
           id: Number(Date.now()),
           title,
           dueDate: 0,
+          dueAt: null,
           submissions: 0,
           timeLeft: '',
           clarityScore: 0,
@@ -325,12 +388,10 @@ export default function EducatorDashboard() {
         const me = await getMe();
         if (!alive || !me?.ok) return;
         const u = me.user || {};
-        const first = u.first_name?.toString().trim();
-        const last = u.last_name?.toString().trim();
-        const name = [first, last].filter(Boolean).join(' ') || u.email || 'User';
-        const primary = (u.primary_role || (Array.isArray(u.roles) ? u.roles[0] : '')) as string;
-        const role = primary ? primary.charAt(0).toUpperCase() + primary.slice(1) : undefined;
-        setUserProfile({ name, avatar: u.picture, role });
+        const name = getDisplayName(u);
+        // Get role from backend response (primary_role or first role in roles array)
+        const userRole = u.primary_role || (u.roles && Array.isArray(u.roles) && u.roles.length > 0 ? u.roles[0] : null);
+        setUserProfile({ name, avatar: u.picture, role: userRole || null });
       } catch (e) {
         console.error('Failed to load user profile for sidebar', e);
       }
@@ -344,21 +405,27 @@ export default function EducatorDashboard() {
         const now = new Date();
         const mapped: Task[] = (r.tasks || []).map((t: TaskListItem) => {
           const due = t.due_at ? new Date(t.due_at) : null;
-          // No due date => treat as open task (green indicator)
-          const dueDays = due ? Math.max(0, Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 36500;
+          const dueDays = due ? Math.max(0, Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : null;
+          const isArchived = t.status === 'archived';
           return {
             id: t.id, // DB UUID
             title: t.task_title || 'Untitled task',
             dueDate: dueDays,
-            submissions: 0,
+            dueAt: due ? due.toISOString() : null,
+            opensAt: t.opens_at || null,
+            updatedAt: t.updated_at || null,
+            submissions: t.submission_count ?? 0,
             timeLeft: '',
-            clarityScore: 0,
-            isDraft: t.status !== 'published',
+            clarityScore: t.avg_clarity_score ?? undefined,
+            isDraft: t.status === 'draft',
+            isArchived,
           } as Task;
         });
         setDbSidebarTasks(mapped);
       } catch (e) {
         console.error('Failed to load tasks list', e);
+      } finally {
+        if (alive) setIsSidebarLoading(false);
       }
     })();
     return () => { alive = false; };
@@ -366,15 +433,13 @@ export default function EducatorDashboard() {
 
   const refreshProfile = async () => {
     try {
-      const me = await getMe();
-      if (!me?.ok) return;
-      const u = me.user || {};
-      const first = u.first_name?.toString().trim();
-      const last = u.last_name?.toString().trim();
-      const name = [first, last].filter(Boolean).join(' ') || u.email || 'User';
-      const primary = (u.primary_role || (Array.isArray(u.roles) ? u.roles[0] : '')) as string;
-      const role = primary ? primary.charAt(0).toUpperCase() + primary.slice(1) : undefined;
-      setUserProfile({ name, avatar: u.picture, role });
+        const me = await getMe();
+        if (!me?.ok) return;
+        const u = me.user || {};
+        const name = getDisplayName(u);
+        // Get role from backend response (primary_role or first role in roles array)
+        const userRole = u.primary_role || (u.roles && Array.isArray(u.roles) && u.roles.length > 0 ? u.roles[0] : null);
+        setUserProfile({ name, avatar: u.picture, role: userRole || null });
     } catch (e) {
       // ignore refresh error
     }
@@ -383,26 +448,35 @@ export default function EducatorDashboard() {
   // CHANGED: Main panel (landing vs OngoingTasks after a task is selected)
   // Helper to refresh DB task list in sidebar (after publish/save)
   const refreshDbSidebar = async () => {
+    const shouldShowLoading = dbSidebarTasks.length === 0;
+    if (shouldShowLoading) setIsSidebarLoading(true);
     try {
       const r = await listTasks();
       if (!r?.ok) return;
       const now = new Date();
-      const mapped: Task[] = (r.tasks || []).map((t: TaskListItem) => {
+        const mapped: Task[] = (r.tasks || []).map((t: TaskListItem) => {
         const due = t.due_at ? new Date(t.due_at) : null;
-        const dueDays = due ? Math.max(0, Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 36500;
+        const dueDays = due ? Math.max(0, Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : null;
+        const isArchived = t.status === 'archived';
         return {
           id: t.id,
           title: t.task_title || 'Untitled task',
           dueDate: dueDays,
-          submissions: 0,
+          dueAt: due ? due.toISOString() : null,
+          opensAt: t.opens_at || null,
+          updatedAt: t.updated_at || null,
+          submissions: t.submission_count ?? 0,
           timeLeft: '',
-          clarityScore: 0,
-          isDraft: t.status !== 'published',
+          clarityScore: t.avg_clarity_score ?? undefined,
+          isDraft: t.status === 'draft',
+          isArchived,
         } as Task;
       });
       setDbSidebarTasks(mapped);
     } catch (e) {
       console.error('Failed to refresh tasks list', e);
+    } finally {
+      if (shouldShowLoading) setIsSidebarLoading(false);
     }
   };
 
@@ -425,12 +499,17 @@ const publishNow = async () => {
         if (created?.ok && created.task_id) {
           taskId = created.task_id as string;
           setDbTaskId(taskId);
+          // Capture link if provided by backend
+          if (created.link) {
+            setTaskLink(created.link);
+          }
           setSelectedTask((prev) => prev ? { ...prev, id: created.task_id as any, isDraft: false } : prev);
         } else {
           throw new Error('Failed to create draft before publish');
         }
-      } else {
-        // ensure latest content is saved before publish
+      }
+      // Always ensure latest content is saved before publish (even if draft was just created)
+      if (taskId) {
         await updateTaskMain(taskId, {
           task_title: taskFormData.title,
           objective: taskFormData.objective,
@@ -450,7 +529,7 @@ const publishNow = async () => {
         setShowTaskLink(Boolean(pub?.link));
         setTaskLink(pub?.link || null);
         // mark selected task as non-draft and update due indicator
-        setSelectedTask((prev) => prev ? { ...prev, isDraft: false, dueDate: scheduledEnd ? Math.max(0, Math.ceil(((scheduledEnd as Date).getTime() - Date.now()) / (1000*60*60*24))) : 36500 } : prev);
+        setSelectedTask((prev) => prev ? { ...prev, isDraft: false, dueDate: scheduledEnd ? Math.max(0, Math.ceil(((scheduledEnd as Date).getTime() - Date.now()) / (1000*60*60*24))) : 36500, dueAt: scheduledEnd ? (scheduledEnd as Date).toISOString() : null } : prev);
         await refreshDbSidebar();
       }
     } catch (e) {
@@ -467,11 +546,46 @@ const publishNow = async () => {
         taskTitle={selectedTask.title}
         submissions={submissions}
         taskFormData={taskFormData}
+        avgClarityScore={avgClarityScore}
         onTaskFormChange={setTaskFormData}
         formKey={formKey}
         modifyLoading={isModifying}
         onPublishTask={async (_data) => {
           // Always use unified publish modal; it can handle Open task vs Scheduled
+          // If no task exists in DB yet, create draft first to generate link
+          if (!dbTaskId) {
+            try {
+              const ai_task = convertFormDataToAiTask(taskFormData);
+              const created = await createDraft({
+                ai_task,
+                opens_at: scheduledStart ? new Date(scheduledStart).toISOString() : null,
+                due_at: scheduledEnd ? new Date(scheduledEnd).toISOString() : null,
+                study_link: null,
+                access_code: null,
+              });
+              if (created?.ok && created.task_id) {
+                setDbTaskId(created.task_id as string);
+                if (created.link) {
+                  setTaskLink(created.link);
+                  setShowTaskLink(true);
+                }
+                setSelectedTask((prev) => prev ? { ...prev, id: created.task_id as any } : prev);
+              }
+            } catch (e) {
+              console.error('Failed to create draft before publish modal:', e);
+            }
+          } else if (!taskLink) {
+            // Task exists but link not in state - fetch it
+            try {
+              const taskData = await getTaskForm(dbTaskId);
+              if (taskData?.ok && taskData?.task?.link) {
+                setTaskLink(taskData.task.link);
+                setShowTaskLink(true);
+              }
+            } catch (e) {
+              console.warn('Failed to fetch task link:', e);
+            }
+          }
           setShowPublishModal(true);
         }}
         onModifyTask={async (message: string) => {
@@ -609,8 +723,13 @@ const publishNow = async () => {
               if (created?.ok && created.task_id) {
                 taskId = created.task_id as string;
                 setDbTaskId(taskId);
+                // Capture link if provided by backend (link is generated immediately on task creation)
+                if (created.link) {
+                  setTaskLink(created.link);
+                  setShowTaskLink(true);
+                }
                 setSelectedTask((prev) => prev ? { ...prev, id: created.task_id as any } : prev);
-                console.log('[Draft] created', created.task_id);
+                console.log('[Draft] created', created.task_id, 'link:', created.link);
             setToast({ message: 'Draft saved', kind: 'success', position: 'center' });
                 await refreshDbSidebar();
                 return; // do not proceed to PUT on first save
@@ -644,39 +763,48 @@ const publishNow = async () => {
         scheduledEnd={scheduledEnd}
         showTaskLink={showTaskLink}
         taskLink={taskLink}
+        onBackToMain={handleReturnToBuilder}
+        onCloseTask={async () => {
+          if (!dbTaskId) {
+            setToast({ message: 'No task selected to close', kind: 'error' });
+            return;
+          }
+          try {
+            const result = await closeTask(dbTaskId);
+            if (result?.ok) {
+              setToast({ message: 'Task closed successfully', kind: 'success' });
+              // Return to main dashboard
+              setShowingLayout3(false);
+              setSelectedTask(null);
+              await refreshDbSidebar();
+            } else {
+              setToast({ message: result?.error || 'Failed to close task', kind: 'error' });
+            }
+          } catch (e) {
+            console.error('Close task error', e);
+            setToast({ message: 'Failed to close task', kind: 'error' });
+          }
+        }}
+        publishLabel={publishButtonLabel}
+        onNotify={(message, kind) => setToast({ message, kind })}
       />
     ) : (
     <Layout1>
-      <div className="flex flex-col items-center justify-center px-8 py-16 gap-12">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <div className="flex items-center gap-4">
-            <Image src="/hens-main.svg" alt="Hens" width={72} height={72} className="h-16 w-16 md:h-20 md:w-20" />
-            <p className="font-semibold text-[#484de6] text-2xl md:text-3xl text-center">
-              Hens can turn words into comprehensive tasks
-            </p>
-          </div>
-        </div>
+      <div className="flex flex-col items-center justify-center px-8 py-16 gap-16 w-full">
+        <TaskCreationSlogan />
+        <div className="w-full flex flex-col items-center gap-8">
         <AInputBox
           value={taskInput}
           onChange={setTaskInput}
           onSubmit={handlePromptSubmit}
           placeholder="Describe your task shortly"
           maxWidth="2200px"
-          className="w-full"
           disabled={isGenerating}
         />
-        {isGenerating && (
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <svg className="animate-spin h-4 w-4 text-[#484de6]" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-            </svg>
-            <span>Generating task…</span>
-          </div>
-        )}
-        <p className="text-gray-500 text-sm">
-          The more detailed description, the more precise the result.
+          <p className="text-gray-500 text-[18px] text-center max-w-2xl">
+            The more detailed description, as precise the result. Even a simple start like; "I want my learners to understand [topic]" is enough.
         </p>
+        </div>
       </div>
     </Layout1>
     )
@@ -700,26 +828,10 @@ const publishNow = async () => {
         userProfile={userProfile}
         onLogout={handleLogout} // CHANGED: pass logout to Sidebar
         onProfileUpdated={refreshProfile}
+        audience="educator"
+        isTasksLoading={isSidebarLoading}
         isLoading={isGenerating || isModifying || isPublishing}
       />
-      <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-2 text-sm">
-        <button
-          type="button"
-          onClick={handleReturnToBuilder}
-          className="rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-slate-700 shadow hover:bg-white transition"
-        >
-          Back to AI Task Builder
-        </button>
-        <button
-          type="button"
-          onClick={handleSwitchToStudent}
-          disabled={isSwitchingRole}
-          className="rounded-full bg-[#484de6] px-4 py-2 text-white shadow hover:bg-[#3b42d9] disabled:opacity-60 disabled:cursor-not-allowed transition flex flex-col items-end"
-        >
-          <span>{isSwitchingRole ? 'Opening Learner Experience…' : 'Open Learner Experience'}</span>
-          <span className="text-[11px] text-indigo-100">for test purposes</span>
-        </button>
-      </div>
       {/* Preview modal (student view) */}
       {showingLayout3 && (
         <PreviewModal
@@ -728,6 +840,40 @@ const publishNow = async () => {
           taskData={taskFormData}
           onPublish={async () => {
             setShowPreview(false);
+            // If no task exists in DB yet, create draft first to generate link
+            if (!dbTaskId) {
+              try {
+                const ai_task = convertFormDataToAiTask(taskFormData);
+                const created = await createDraft({
+                  ai_task,
+                  opens_at: scheduledStart ? new Date(scheduledStart).toISOString() : null,
+                  due_at: scheduledEnd ? new Date(scheduledEnd).toISOString() : null,
+                  study_link: null,
+                  access_code: null,
+                });
+                if (created?.ok && created.task_id) {
+                  setDbTaskId(created.task_id as string);
+                  if (created.link) {
+                    setTaskLink(created.link);
+                    setShowTaskLink(true);
+                  }
+                  setSelectedTask((prev) => prev ? { ...prev, id: created.task_id as any } : prev);
+                }
+              } catch (e) {
+                console.error('Failed to create draft before publish modal:', e);
+              }
+            } else if (!taskLink) {
+              // Task exists but link not in state - fetch it
+              try {
+                const taskData = await getTaskForm(dbTaskId);
+                if (taskData?.ok && taskData?.task?.link) {
+                  setTaskLink(taskData.task.link);
+                  setShowTaskLink(true);
+                }
+              } catch (e) {
+                console.warn('Failed to fetch task link:', e);
+              }
+            }
             setShowPublishModal(true);
           }}
         />
@@ -738,14 +884,30 @@ const publishNow = async () => {
         <TaskScheduleModal
           isOpen={showSchedule}
           onClose={() => setShowSchedule(false)}
-          onSave={(start, end) => {
+          initialStartDate={scheduledStart}
+          initialEndDate={scheduledEnd}
+          onSave={async (start, end) => {
             setScheduledStart(start);
             setScheduledEnd(end);
             // Update sidebar due indicator for the draft (if present)
             if (end && selectedTask) {
               const now = new Date();
               const days = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-              setSelectedTask({ ...selectedTask, dueDate: days });
+              setSelectedTask({ ...selectedTask, dueDate: days, dueAt: end.toISOString() });
+            }
+            
+            // Save schedule to database immediately if task exists
+            if (dbTaskId) {
+              try {
+                await updateTaskMain(dbTaskId, {
+                  opens_at: start ? new Date(start).toISOString() : null,
+                  due_at: end ? new Date(end).toISOString() : null,
+                });
+                console.log('[EducatorDashboard] Schedule saved to database');
+              } catch (error) {
+                console.error('[EducatorDashboard] Failed to save schedule:', error);
+                // Still update UI even if DB save fails
+              }
             }
           }}
         />
@@ -757,10 +919,189 @@ const publishNow = async () => {
           isOpen={showSubmissionModal}
           onClose={() => setShowSubmissionModal(false)}
           selectedSubmission={selectedSubmissionModal as any}
-          // For now, educator approval flow is disabled for pending enrollments
-          onApproveGrade={() => {}}
-          onEducatorSubmission={() => { setShowSubmissionModal(false); }}
-          isGradeApproved={false}
+          educatorSubmission={selectedSubmissionModal ? educatorSubmissions[selectedSubmissionModal.id] : undefined}
+          isGradeApproved={selectedSubmissionModal ? approvedGrades[selectedSubmissionModal.id] || false : false}
+          onApproveGrade={async (grade: 'pass' | 'fail', feedback?: string) => {
+            if (!selectedSubmissionModal) return;
+            try {
+              // Use the backendId if available, otherwise find it
+              const backendSubmissionId = selectedSubmissionModal.backendId;
+              if (!backendSubmissionId) {
+                // Fallback: find by student name
+                const sub = await getTaskSubmissions(dbTaskId!);
+                if (sub?.ok && Array.isArray(sub.submissions)) {
+                  const backendSubmission = sub.submissions.find((s: any) => {
+                    const studentName = (s.student?.name ?? '').toString().trim() || (s.student?.email || null);
+                    return studentName === selectedSubmissionModal.studentName;
+                  });
+                  if (!backendSubmission?.id) {
+                    onNotify?.('Submission not found', 'error');
+                    return;
+                  }
+                  const educatorScore = grade === 'pass' ? 60 : 0;
+                  // Include feedback if provided, otherwise don't send it to preserve existing
+                  const payload: any = {
+                    educator_score: educatorScore,
+                    status: 'graded'
+                  };
+                  if (feedback && feedback.trim()) {
+                    payload.educator_feedback = feedback.trim();
+                  }
+                  await gradeSubmission(backendSubmission.id.toString(), payload);
+                } else {
+                  onNotify?.('Failed to find submission', 'error');
+                  return;
+                }
+              } else {
+                // Use the stored backendId
+                const educatorScore = grade === 'pass' ? 60 : 0;
+                // Include feedback if provided, otherwise don't send it to preserve existing
+                const payload: any = {
+                  educator_score: educatorScore,
+                  status: 'graded'
+                };
+                if (feedback && feedback.trim()) {
+                  payload.educator_feedback = feedback.trim();
+                }
+                await gradeSubmission(backendSubmissionId, payload);
+              }
+              
+              // Update local state immediately for instant UI feedback
+              const submissionId = selectedSubmissionModal.id;
+              setEducatorSubmissions(prev => ({
+                ...prev,
+                [submissionId]: {
+                  grade,
+                  feedback: feedback || '',
+                  submittedAt: new Date(),
+                }
+              }));
+              setApprovedGrades(prev => ({
+                ...prev,
+                [submissionId]: true
+              }));
+              
+              // Refresh submissions to get latest data from backend
+              if (dbTaskId) {
+                const updated = await getTaskSubmissions(dbTaskId);
+                if (updated?.ok && Array.isArray(updated.submissions)) {
+                  // Rebuild educator submissions and approved grades
+                  const newEducatorSubmissions: EducatorSubmissionsMap = {};
+                  const newApprovedGrades: ApprovedGradesMap = {};
+                  updated.submissions.forEach((s: any, idx: number) => {
+                    const submissionId = idx + 1;
+                    if (s.educator_score !== null && s.educator_score !== undefined) {
+                      const grade = s.educator_score >= 60 ? 'pass' : 'fail';
+                      newEducatorSubmissions[submissionId] = {
+                        grade: grade as 'pass' | 'fail',
+                        feedback: s.educator_feedback || '',
+                        submittedAt: s.graded_at ? new Date(s.graded_at) : new Date(),
+                      };
+                      if (s.status === 'graded') {
+                        newApprovedGrades[submissionId] = true;
+                      }
+                    }
+                  });
+                  setEducatorSubmissions(newEducatorSubmissions);
+                  setApprovedGrades(newApprovedGrades);
+                }
+              }
+              
+              setShowSubmissionModal(false);
+              onNotify?.('Grade approved successfully', 'success');
+            } catch (error) {
+              console.error('Failed to approve grade:', error);
+              onNotify?.('Failed to approve grade. Please try again.', 'error');
+            }
+          }}
+          onEducatorSubmission={async (grade: string, feedback: string) => {
+            if (!selectedSubmissionModal) return;
+            try {
+              // Use the backendId if available, otherwise find it
+              const backendSubmissionId = selectedSubmissionModal.backendId;
+              if (!backendSubmissionId) {
+                // Fallback: find by student name
+                const sub = await getTaskSubmissions(dbTaskId!);
+                if (sub?.ok && Array.isArray(sub.submissions)) {
+                  const backendSubmission = sub.submissions.find((s: any) => {
+                    const studentName = (s.student?.name ?? '').toString().trim() || (s.student?.email || null);
+                    return studentName === selectedSubmissionModal.studentName;
+                  });
+                  if (!backendSubmission?.id) {
+                    onNotify?.('Submission not found', 'error');
+                    return;
+                  }
+                  const educatorScore = grade === 'pass' ? 60 : 0;
+                  // Send feedback only if it's not empty, otherwise send null to preserve existing
+                  const trimmedFeedback = feedback?.trim() || null;
+                  await gradeSubmission(backendSubmission.id.toString(), {
+                    educator_score: educatorScore,
+                    educator_feedback: trimmedFeedback,
+                    status: 'graded'
+                  });
+                } else {
+                  onNotify?.('Failed to find submission', 'error');
+                  return;
+                }
+              } else {
+                // Use the stored backendId
+                const educatorScore = grade === 'pass' ? 60 : 0;
+                // Send feedback only if it's not empty, otherwise send null to preserve existing
+                const trimmedFeedback = feedback?.trim() || null;
+                await gradeSubmission(backendSubmissionId, {
+                  educator_score: educatorScore,
+                  educator_feedback: trimmedFeedback,
+                  status: 'graded'
+                });
+              }
+              
+              // Update local state
+              const submissionId = selectedSubmissionModal.id;
+              setEducatorSubmissions(prev => ({
+                ...prev,
+                [submissionId]: {
+                  grade: grade as 'pass' | 'fail',
+                  feedback,
+                  submittedAt: new Date(),
+                }
+              }));
+              setApprovedGrades(prev => ({
+                ...prev,
+                [submissionId]: true
+              }));
+              
+              // Refresh submissions
+              if (dbTaskId) {
+                const updated = await getTaskSubmissions(dbTaskId);
+                if (updated?.ok && Array.isArray(updated.submissions)) {
+                  const newEducatorSubmissions: EducatorSubmissionsMap = {};
+                  const newApprovedGrades: ApprovedGradesMap = {};
+                  updated.submissions.forEach((s: any, idx: number) => {
+                    const submissionId = idx + 1;
+                    if (s.educator_score !== null && s.educator_score !== undefined) {
+                      const grade = s.educator_score >= 60 ? 'pass' : 'fail';
+                      newEducatorSubmissions[submissionId] = {
+                        grade: grade as 'pass' | 'fail',
+                        feedback: s.educator_feedback || '',
+                        submittedAt: s.graded_at ? new Date(s.graded_at) : new Date(),
+                      };
+                      if (s.status === 'graded') {
+                        newApprovedGrades[submissionId] = true;
+                      }
+                    }
+                  });
+                  setEducatorSubmissions(newEducatorSubmissions);
+                  setApprovedGrades(newApprovedGrades);
+                }
+              }
+              
+              setShowSubmissionModal(false);
+              onNotify?.('Grade submitted successfully', 'success');
+            } catch (error) {
+              console.error('Failed to submit grade:', error);
+              onNotify?.('Failed to submit grade. Please try again.', 'error');
+            }
+          }}
         />
       )}
 
@@ -776,7 +1117,7 @@ const publishNow = async () => {
             const e = scheduledEnd ? new Date(scheduledEnd) : null;
             if (!s && !e) return null;
             const fmt = (d: Date) => d.toLocaleDateString();
-            return `${s ? fmt(s) : 'Now'} – ${e ? fmt(e) : 'Open'}`;
+            return { start: s ? fmt(s) : 'Now', end: e ? fmt(e) : 'Open' };
           })()}
           existingLink={taskLink}
           hasSchedule={Boolean(scheduledStart || scheduledEnd)}
@@ -784,6 +1125,7 @@ const publishNow = async () => {
           onConfirm={async ({ accessCode }) => {
             setPendingAccessCode(accessCode || '');
             setShowPublishModal(false);
+            // publishNow will handle publishing (draft already created if needed)
             await publishNow();
           }}
         />

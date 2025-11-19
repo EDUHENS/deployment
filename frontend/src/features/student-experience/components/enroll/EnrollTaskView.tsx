@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Link as LinkIcon, Lock } from 'lucide-react';
+import { Link as LinkIcon, Lock, Loader2 } from 'lucide-react';
 import type { EnrollPayload } from '@/features/student-experience/types/studentTask';
 
 interface EnrollTaskViewProps {
@@ -10,13 +10,31 @@ interface EnrollTaskViewProps {
 }
 
 export default function EnrollTaskView({ onEnroll, isSubmitting = false }: EnrollTaskViewProps) {
-  const [link, setLink] = useState('www.tasktitle-eduhens.com');
+  const [link, setLink] = useState('');
   const [passcode, setPasscode] = useState('');
+  const [isLinkFocused, setIsLinkFocused] = useState(false);
+  const [isPassFocused, setIsPassFocused] = useState(false);
+  const [isEnrollHovered, setIsEnrollHovered] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const isLoading = isSubmitting || isProcessing;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    // Allow enrollment even without filling required fields for mock purposes
-    await onEnroll({ link: link.trim() || 'mock-task-link', passcode: passcode.trim() || 'mock-passcode' });
+    if (isLoading) return;
+    try {
+      const trimmedLink = link.trim();
+      const trimmedPasscode = passcode.trim();
+      if (!trimmedLink || !trimmedPasscode) {
+        setError('Please enter both the task link and the passcode.');
+        return;
+      }
+      setError(null);
+      setIsProcessing(true);
+      await onEnroll({ link: trimmedLink, passcode: trimmedPasscode });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   // Icons are decorative; no copy interaction in student view per spec
@@ -34,14 +52,16 @@ export default function EnrollTaskView({ onEnroll, isSubmitting = false }: Enrol
             <label className="h-[24px] text-[16px] leading-[1.5] tracking-[0.32px] text-[#717680]">
               Task Link
             </label>
-            <div className="relative w-full rounded-[4px] border border-[#e9eaeb] bg-white transition-all focus-within:border-[#484de6] focus-within:ring-4 focus-within:ring-[#c7d7fe] hover:border-[#cfd1d4]">
+            <div className="group relative w-full rounded-[4px] border border-[#e6e6e6] bg-white transition-colors hover:border-[#484de6] focus-within:border-[#484de6]">
               <div className="flex items-center justify-between overflow-clip rounded-[inherit] px-4 py-6">
                 <input
                   type="text"
                   value={link}
                   onChange={(e) => setLink(e.target.value)}
-                  className="h-[24px] flex-1 leading-[1.5] text-[#717680] outline-none placeholder:text-[#717680]"
-                  placeholder="www.tasktitle-eduhens.com"
+                  onFocus={() => setIsLinkFocused(true)}
+                  onBlur={() => setIsLinkFocused(false)}
+                  className="h-[24px] flex-1 leading-[1.5] text-[#717680] outline-none placeholder:text-gray-300 group-hover:placeholder:text-gray-600 transition-colors"
+                  placeholder={isLinkFocused ? '' : 'www.tasktitle-eduhens.com'}
                 />
                 <span className="shrink-0" aria-hidden>
                   <LinkIcon className="size-5 text-[#717680]" />
@@ -58,14 +78,16 @@ export default function EnrollTaskView({ onEnroll, isSubmitting = false }: Enrol
             <label className="h-[24px] text-[16px] leading-[1.5] tracking-[0.32px] text-[#717680]">
               Passcode
             </label>
-            <div className="relative w-full rounded-[4px] border border-[#e9eaeb] bg-white transition-all focus-within:border-[#484de6] focus-within:ring-4 focus-within:ring-[#c7d7fe] hover:border-[#cfd1d4]">
+            <div className="group relative w-full rounded-[4px] border border-[#e6e6e6] bg-white transition-colors hover:border-[#484de6] focus-within:border-[#484de6]">
               <div className="flex items-center justify-between overflow-clip rounded-[inherit] px-4 py-6">
                 <input
                   type="password"
                   value={passcode}
                   onChange={(e) => setPasscode(e.target.value)}
-                  className="h-[24px] flex-1 leading-[1.5] text-[#717680] outline-none placeholder:text-[#717680]"
-                  placeholder="**********"
+                  onFocus={() => setIsPassFocused(true)}
+                  onBlur={() => setIsPassFocused(false)}
+                  className="h-[24px] flex-1 leading-[1.5] text-[#717680] outline-none placeholder:text-gray-300 group-hover:placeholder:text-gray-600 transition-colors"
+                  placeholder={isPassFocused ? '' : '**********'}
                 />
                 <span className="shrink-0" aria-hidden>
                   <Lock className="size-5 text-[#717680]" />
@@ -80,11 +102,20 @@ export default function EnrollTaskView({ onEnroll, isSubmitting = false }: Enrol
           {/* Enroll Button */}
           <button
             type="submit"
-            disabled={isSubmitting}
-            className="w-full rounded-[4px] bg-[#484de6] px-8 py-5 text-center text-[16px] font-normal leading-[normal] text-[#f8f8f8] transition-colors hover:bg-[#3A3FE4] disabled:cursor-not-allowed disabled:bg-[#8487f7]"
+            disabled={isLoading}
+            onMouseEnter={() => setIsEnrollHovered(true)}
+            onMouseLeave={() => setIsEnrollHovered(false)}
+            className="group/enroll w-full rounded-[4px] bg-[#484de6] px-8 py-5 text-center text-[16px] font-normal leading-[normal] text-[#f8f8f8] transition-all cursor-pointer disabled:cursor-not-allowed disabled:bg-[#8487f7]"
+            style={{
+              border: isEnrollHovered ? '3px solid #FA906A' : '3px solid #6976EB',
+            }}
           >
-            {isSubmitting ? 'Enrolling…' : 'Enroll'}
+            <span className="flex items-center justify-center gap-3">
+              {isLoading && <Loader2 className="h-5 w-5 animate-spin text-white" />}
+              {isLoading ? 'Enrolling…' : 'Enroll'}
+            </span>
           </button>
+          {error && <p className="text-sm text-red-600">{error}</p>}
         </form>
       </div>
     </div>

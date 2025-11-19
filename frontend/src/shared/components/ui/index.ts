@@ -11,3 +11,7 @@ export { default as AttachmentIcon } from './AttachmentIcon';
 export { default as AIAssessmentBadge } from './AIAssessmentBadge';
 export { DateTimePicker } from './date-time-picker';
 export { default as HensLoader } from './HensLoader';
+export { default as CloseButton } from './CloseButton';
+export { default as RocketIcon } from './RocketIcon';
+export { default as PublishButton } from './PublishButton';
+export { CopyIcon, ShareIcon, EyeIcon } from './ConsistentIcons';

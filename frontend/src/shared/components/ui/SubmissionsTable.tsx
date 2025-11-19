@@ -9,6 +9,7 @@ interface SimpleSubmission {
   status: string;
   date: string;
   studentName: string;
+  studentAvatarUrl?: string;
   educatorAssessment: string;
   educatorGradingStatus?: string; // New field for educator grading status
   dateTime: string;
@@ -59,7 +60,7 @@ export default function SubmissionsTable({ submissions, className = '', onSubmis
               />
             </div>
             <p className="font-['Helvetica_Neue:Medium',sans-serif] leading-[normal] not-italic relative shrink-0 text-[#535862] text-[16px] text-nowrap tracking-[0.28px] whitespace-pre">
-              <span className="font-['Nunito_Sans:Bold_Italic',sans-serif] font-bold italic text-[#484de6]">
+              <span className="font-nunito font-bold italic text-[#484de6]">
                 Hens
               </span>{" "}
               Assessment
@@ -75,6 +76,7 @@ export default function SubmissionsTable({ submissions, className = '', onSubmis
             <SubmissionRow
               key={submission.id}
               studentName={submission.studentName}
+              studentAvatarUrl={submission.studentAvatarUrl}
               educatorAssessment={submission.educatorAssessment}
               educatorGradingStatus={submission.educatorGradingStatus}
               dateTime={submission.dateTime}

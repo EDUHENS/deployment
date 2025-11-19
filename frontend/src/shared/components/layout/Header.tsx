@@ -10,9 +10,11 @@ export interface HeaderProps {
   scheduledStart?: Date | null;
   scheduledEnd?: Date | null;
   taskTitle?: string; // Dynamic task title
+  onBack?: () => void; // Back button handler
+  leftContent?: ReactNode; // Custom left content (e.g., back button)
 }
 
-export default function Header({ title, subtitle, actions, className = '', scheduledStart, scheduledEnd, taskTitle }: HeaderProps) {
+export default function Header({ title, subtitle, actions, className = '', scheduledStart, scheduledEnd, taskTitle, onBack, leftContent }: HeaderProps) {
   const formatDateTime = (date: Date | null | undefined) => {
     if (!date) return null;
     const dateStr = date.toLocaleDateString('en-US', { 
@@ -30,35 +32,23 @@ export default function Header({ title, subtitle, actions, className = '', sched
 
   return (
     <div className={`bg-[#f8f8f8] box-border content-stretch flex items-end justify-between pb-[16px] pt-[32px] px-[16px] relative size-full gap-[48px] ${className}`}>
+      {/* Left Content (Back Button) */}
+      {leftContent && (
+        <div className="shrink-0">
+          {leftContent}
+        </div>
+      )}
+      
       {/* COLUMN 1: Page Info and Task Title */}
       <div className="flex flex-col gap-[8px] shrink-0">
-        {/* Page Title: Task Lab / Create New Task */}
-        <div className="flex items-center gap-[8px]">
-          {title && (
-            <>
-              <p className="font-['Helvetica_Neue:Medium', sans-serif] leading-[1.2] not-italic text-[#222222] text-[22px] tracking-[0.4px]">
-                {title}
-              </p>
-              {subtitle && (
-                <>
-                  <span className="font-['Helvetica_Neue:Medium', sans-serif] text-[#999999] text-[22px]">/</span>
-                  <p className="font-['Helvetica_Neue:Regular', sans-serif] leading-[1.2] not-italic text-[#222222] text-[22px] tracking-[0.4px]">
-                    {subtitle}
-                  </p>
-                </>
-              )}
-            </>
-          )}
-          {!title && subtitle && (
-            <p className="font-['Helvetica_Neue:Regular', sans-serif] leading-[1.2] not-italic text-[#222222] text-[22px] tracking-[0.4px]">
-              {subtitle}
-            </p>
-          )}
-        </div>
+        {/* Page Title: Task Studio */}
+        <p className="font-['Helvetica_Neue:Bold', sans-serif] leading-[normal] not-italic text-[#484de6] text-[14px] tracking-[0.28px]">
+          Task Studio
+        </p>
         
         {/* Task Title */}
         {taskTitle && (
-              <p className="font-['Helvetica_Neue:Regular', sans-serif] leading-[1.5] not-italic text-[#222222] text-[18px] tracking-[0.32px] max-w-[300px] truncate">
+          <p className="font-['Helvetica_Neue:Bold', sans-serif] leading-[normal] not-italic text-[#222222] text-[16px] tracking-[0.32px] max-w-[300px] truncate">
             {taskTitle}
           </p>
         )}

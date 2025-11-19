@@ -1,6 +1,7 @@
 'use client';
 
-import { CircleX, CheckCircle2 } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
+import CloseButton from './CloseButton';
 import AIAssessmentBadge from './AIAssessmentBadge';
 import AttachmentIcon from './AttachmentIcon';
 
@@ -45,12 +46,7 @@ export default function SubmissionModal({
             </h3>
             <p className="text-base text-gray-500">{submission.submissionDate}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 hover:animate-rotate-360 transition-colors duration-200 cursor-pointer"
-          >
-            <CircleX className="w-6 h-6" />
-          </button>
+          <CloseButton onClick={onClose} size="sm" />
         </div>
 
         {/* Modal Content */}

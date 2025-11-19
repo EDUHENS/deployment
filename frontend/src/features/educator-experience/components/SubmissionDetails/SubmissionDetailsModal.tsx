@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CircleX, CheckCircle, FileText, Github } from 'lucide-react';
+import CloseButton from '@/shared/components/ui/CloseButton';
 import type { SubmissionAttachment } from '@/features/educator-experience/types/submission';
 
 // TODO(db): Wire approve and educator submission actions to backend.
@@ -9,7 +10,7 @@ import type { SubmissionAttachment } from '@/features/educator-experience/types/
 interface SubmissionDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onApproveGrade: (grade: 'pass' | 'fail') => void;
+  onApproveGrade: (grade: 'pass' | 'fail', feedback?: string) => void;
   onEducatorSubmission?: (grade: string, feedback: string) => void;
   educatorSubmission?: {
     grade: string;
@@ -96,12 +97,7 @@ const SubmissionDetailsModal: React.FC<SubmissionDetailsModalProps> = ({
         {/* Header */}
         <div className="px-8 py-6 border-b border-gray-200 bg-gray-50/50 flex items-center justify-between flex-shrink-0 rounded-t-2xl">
           <h2 className="text-xl font-semibold text-gray-900">Submission Details</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-lg"
-          >
-            <CircleX className="w-6 h-6" />
-          </button>
+          <CloseButton onClick={onClose} size="sm" />
         </div>
 
         {/* Scrollable Content */}
@@ -111,7 +107,7 @@ const SubmissionDetailsModal: React.FC<SubmissionDetailsModalProps> = ({
             <div>
               <p className="text-sm font-medium text-gray-600 mb-2">Student Name</p>
               <p className="text-lg font-semibold text-gray-900">
-                {selectedSubmission?.studentName || 'Student'}
+                {selectedSubmission?.studentName || 'Unknown Student'}
               </p>
             </div>
             <div>
@@ -214,7 +210,7 @@ const SubmissionDetailsModal: React.FC<SubmissionDetailsModalProps> = ({
                     value={educatorFeedback}
                     onChange={(e) => setEducatorFeedback(e.target.value)}
                     placeholder="Enter your feedback here..."
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-gray-900 placeholder:text-gray-400"
                     rows={4}
                     maxLength={500}
                   />
@@ -333,15 +329,14 @@ const SubmissionDetailsModal: React.FC<SubmissionDetailsModalProps> = ({
                     : (selectedSubmission?.aiAssessment?.overall as 'pass' | 'fail' | undefined)) ??
                   'pass';
 
-                if (educatorGrade && educatorFeedback.trim()) {
-                  onEducatorSubmission?.(gradeToUse, educatorFeedback.trim());
-                } else if (educatorGrade) {
-                  onEducatorSubmission?.(gradeToUse, '');
-                } else {
-                  onEducatorSubmission?.(gradeToUse, '');
+                // Always call onEducatorSubmission if there's a grade, with trimmed feedback or empty string
+                // The handler will convert empty strings to null
+                if (educatorGrade) {
+                  onEducatorSubmission?.(gradeToUse, educatorFeedback.trim() || '');
                 }
 
-                onApproveGrade?.(gradeToUse);
+                // Pass feedback to onApproveGrade so it can save it along with the grade
+                onApproveGrade?.(gradeToUse, educatorFeedback.trim() || undefined);
               }}
               className="flex-1 px-6 py-4 text-base font-medium text-white bg-blue-600 border border-transparent rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2"
             >

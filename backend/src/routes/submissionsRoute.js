@@ -2,29 +2,19 @@
 const express = require('express');
 const { pool, userModel } = require('../database/index.js');
 const multer = require('multer');
+const { supabase, STORAGE_BUCKET } = require('../database/supabase.js');
 const fs = require('fs');
 const path = require('path');
 
 module.exports = (requireAuth) => {
   const router = express.Router();
-  const uploadRoot = path.join(process.cwd(), 'uploads');
-  if (!fs.existsSync(uploadRoot)) {
-    try { fs.mkdirSync(uploadRoot, { recursive: true }); } catch {}
-  }
-  const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-      const subId = req.params.id || 'misc';
-      const dir = path.join(uploadRoot, subId);
-      try { fs.mkdirSync(dir, { recursive: true }); } catch {}
-      cb(null, dir);
-    },
-    filename: (req, file, cb) => {
-      // keep original name; if collision, multer will overwrite; add timestamp to be safe
-      const base = Date.now() + '-' + (file.originalname || 'file');
-      cb(null, base);
-    }
+  
+  // Use memory storage to get file buffers for Supabase upload
+  const storage = multer.memoryStorage();
+  const upload = multer({ 
+    storage,
+    limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
   });
-  const upload = multer({ storage });
 
   // Best-effort: add extracted_text column for storing small text extracted from uploads
   let ensuredExtractCol = false;
@@ -51,21 +41,19 @@ module.exports = (requireAuth) => {
     );
   }
 
-  async function extractTextFromFile(absPath, mime, name) {
+  async function extractTextFromBuffer(buffer, mime, name) {
     try {
       const n = (name || '').toLowerCase();
       const mt = (mime || '').toLowerCase();
-      // Plain text-like files: just read utf8 (bounded by size in caller)
+      // Plain text-like files: just read utf8
       if (looksTextLike(mt, n)) {
-        const buf = fs.readFileSync(absPath);
-        return buf.toString('utf8');
+        return buffer.toString('utf8');
       }
       // PDF
       if (mt.includes('pdf') || n.endsWith('.pdf')) {
         try {
           const pdf = require('pdf-parse');
-          const data = fs.readFileSync(absPath);
-          const res = await pdf(data);
+          const res = await pdf(buffer);
           return res?.text || '';
         } catch { return ''; }
       }
@@ -73,7 +61,7 @@ module.exports = (requireAuth) => {
       if (n.endsWith('.docx') || mt.includes('word')) {
         try {
           const mammoth = require('mammoth');
-          const res = await mammoth.extractRawText({ path: absPath });
+          const res = await mammoth.extractRawText({ buffer });
           return (res?.value || '').toString();
         } catch { return ''; }
       }
@@ -84,7 +72,7 @@ module.exports = (requireAuth) => {
           const worker = await createWorker();
           await worker.loadLanguage('eng');
           await worker.initialize('eng');
-          const { data: { text } } = await worker.recognize(absPath);
+          const { data: { text } } = await worker.recognize(buffer);
           await worker.terminate();
           return text || '';
         } catch { return ''; }
@@ -318,7 +306,7 @@ module.exports = (requireAuth) => {
       if (!task_id) return res.status(400).json({ ok: false, error: 'missing task_id' });
 
       const s = await pool.query(
-        `SELECT id, status, updated_at, submitted_at, graded_at, notes, ai_score, ai_feedback
+        `SELECT id, status, updated_at, submitted_at, graded_at, notes, ai_score, ai_feedback, educator_score, educator_feedback
            FROM submissions
           WHERE task_id=$1 AND student_id=$2
           ORDER BY updated_at DESC
@@ -334,7 +322,7 @@ module.exports = (requireAuth) => {
         [sub.id]
       );
       const parsed = parseAiFeedback(sub.ai_feedback);
-      console.log('[API /submissions/mine] result id=', sub.id, 'status=', sub.status, 'ai_score=', sub.ai_score, 'ai_present=', !!sub.ai_feedback);
+      console.log('[API /submissions/mine] result id=', sub.id, 'status=', sub.status, 'ai_score=', sub.ai_score, 'ai_present=', !!sub.ai_feedback, 'educator_feedback=', !!sub.educator_feedback);
       return res.json({
         ok: true,
         submission: {
@@ -349,6 +337,8 @@ module.exports = (requireAuth) => {
           ai_overall: parsed.overall || null,
           ai_summary: parsed.summary || null,
           ai_criteria: parsed.criteria || null,
+          educator_score: sub.educator_score,
+          educator_feedback: sub.educator_feedback,
           assets: a.rows,
         }
       });
@@ -427,7 +417,7 @@ module.exports = (requireAuth) => {
       async function buildLocalTextPreviews(submissionId) {
         try {
           const rows = await pool.query(
-            `SELECT file_name, mime_type, storage_key, file_size
+            `SELECT file_name, mime_type, storage_key, file_size, extracted_text
                FROM submission_assets
               WHERE submission_id=$1 AND asset_type='file' AND storage_key IS NOT NULL
               ORDER BY created_at ASC`,
@@ -450,23 +440,49 @@ module.exports = (requireAuth) => {
           };
           for (const r of rows.rows) {
             if (!allow(r.mime_type, r.file_name)) continue;
-            const abs = path.resolve(process.cwd(), r.storage_key);
-            const isUnderUploads = abs.startsWith(uploadRoot + path.sep) || abs === uploadRoot;
-            if (!isUnderUploads || !fs.existsSync(abs)) continue;
-            try {
-              const stat = fs.statSync(abs);
-              if (stat.size > 200_000) continue; // skip very large files
-              const buf = fs.readFileSync(abs);
-              let txt = buf.toString('utf8');
-              if (!txt.trim()) continue;
-              if (txt.length > 8000) txt = txt.slice(0, 8000) + '\n...[truncated]';
-              items.push({ label: r.file_name || path.basename(abs), content: txt });
-              total += txt.length;
-              if (items.length >= 8 || total > 50_000) break;
-            } catch {}
+            
+            let txt = '';
+            
+            // Try extracted_text first (faster)
+            if (r.extracted_text && r.extracted_text.trim()) {
+              txt = r.extracted_text;
+            } else if (r.storage_key && r.storage_key.startsWith('submissions/')) {
+              // Read from Supabase Storage
+              try {
+                if (r.file_size > 200_000) continue; // skip very large files
+                const { data, error } = await supabase.storage
+                  .from(STORAGE_BUCKET)
+                  .download(r.storage_key);
+                if (error || !data) continue;
+                const arrayBuffer = await data.arrayBuffer();
+                const buf = Buffer.from(arrayBuffer);
+                txt = buf.toString('utf8');
+              } catch (e) {
+                console.error('[buildLocalTextPreviews] Error reading from Supabase:', e);
+                continue;
+              }
+            } else {
+              // Legacy filesystem path (backwards compatibility)
+              try {
+                const abs = path.resolve(process.cwd(), r.storage_key);
+                if (!fs.existsSync(abs)) continue;
+                const stat = fs.statSync(abs);
+                if (stat.size > 200_000) continue;
+                const buf = fs.readFileSync(abs);
+                txt = buf.toString('utf8');
+              } catch {
+                continue;
+              }
+            }
+            
+            if (!txt.trim()) continue;
+            if (txt.length > 8000) txt = txt.slice(0, 8000) + '\n...[truncated]';
+            items.push({ label: r.file_name || path.basename(r.storage_key), content: txt });
+            total += txt.length;
+            if (items.length >= 8 || total > 50_000) break;
           }
           if (items.length === 0) return '';
-          return ['','Student local files (previews):', ...items.map(it => `# ${it.label}\n${it.content}`)].join('\n');
+          return ['','Student uploaded files (previews):', ...items.map(it => `# ${it.label}\n${it.content}`)].join('\n');
         } catch { return ''; }
       }
       async function normalizeGitHubLinkToRawCandidates(link) {
@@ -564,7 +580,7 @@ module.exports = (requireAuth) => {
       // --- End: enrichment ---
 
       // Build prompt (reuse logic from submissionsAiRoute)
-      const system = 'You are a strict but fair educator assessing a student submission. Always grade against the provided rubric and criteria only. If evidence is missing or links/files/images are inaccessible, say so and grade conservatively. Return JSON only.';
+      const system = 'You are a strict but fair educator assessing a student submission. Always grade against the provided rubric and criteria only. If evidence is missing or links/files/images are inaccessible, say so and grade conservatively. IMPORTANT: Use PASSIVE VOICE throughout your feedback. Instead of saying "the student did X" or "the student does Y", say "the task was completed" or "the requirement is met" or "the code implements X". Write as if describing the task/submission itself, not the student\'s actions. Return JSON only.';
       const rubric = Array.isArray(ai_task.rubric) ? ai_task.rubric : [];
       const toRows = (r) => (Array.isArray(r) ? r.map(row => (Array.isArray(row) ? row.join(' | ') : String(row))).join('\n') : 'No rubric provided.');
       const user = [
@@ -607,13 +623,38 @@ module.exports = (requireAuth) => {
               const mt = (row.mime_type || '').toLowerCase();
               const isImg = mt.startsWith('image/') || /\.(png|jpg|jpeg)$/i.test(name);
               if (!isImg) continue;
-              const abs = path.resolve(process.cwd(), row.storage_key);
-              const isUnderUploads = abs.startsWith(uploadRoot + path.sep) || abs === uploadRoot;
-              if (!isUnderUploads || !fs.existsSync(abs)) continue;
+              
+              let buf = null;
+              
+              if (row.storage_key && row.storage_key.startsWith('submissions/')) {
+                // Read from Supabase Storage
+                try {
+                  if (row.file_size > maxEach) continue;
+                  const { data, error } = await supabase.storage
+                    .from(STORAGE_BUCKET)
+                    .download(row.storage_key);
+                  if (error || !data) continue;
+                  const arrayBuffer = await data.arrayBuffer();
+                  buf = Buffer.from(arrayBuffer);
+                } catch (e) {
+                  console.error('[buildVisionImageContents] Error reading from Supabase:', e);
+                  continue;
+                }
+              } else {
+                // Legacy filesystem path (backwards compatibility)
+                try {
+                  const abs = path.resolve(process.cwd(), row.storage_key);
+                  if (!fs.existsSync(abs)) continue;
+                  const stat = fs.statSync(abs);
+                  if (stat.size > maxEach) continue;
+                  buf = fs.readFileSync(abs);
+                } catch {
+                  continue;
+                }
+              }
+              
+              if (!buf) continue;
               try {
-                const stat = fs.statSync(abs);
-                if (stat.size > maxEach) continue;
-                const buf = fs.readFileSync(abs);
                 const b64 = buf.toString('base64');
                 const mime = mt || (name.endsWith('.png') ? 'image/png' : name.match(/\.jpe?g$/) ? 'image/jpeg' : 'application/octet-stream');
                 const dataUrl = `data:${mime};base64,${b64}`;
@@ -686,17 +727,37 @@ module.exports = (requireAuth) => {
     try {
       const studentId = await getUserIdFromReq(req);
       const { id } = req.params;
+      const { clarity_score } = req.body || {};
       const owns = await pool.query(`SELECT student_id FROM submissions WHERE id=$1`, [id]);
       if (owns.rowCount === 0) return res.status(404).json({ ok: false, error: 'submission not found' });
       if (owns.rows[0].student_id !== studentId) return res.status(403).json({ ok: false, error: 'forbidden' });
 
-      await pool.query(
-        `UPDATE submissions SET status='submitted', submitted_at=now(), updated_at=now(), ai_feedback=NULL, ai_score=NULL WHERE id=$1`,
-        [id]
-      );
-      console.log(`[Submissions] Submitted: ${id}`);
-      // Trigger AI auto-grade (best-effort)
-      tryAutoGrade(id).catch(() => {});
+      // Validate clarity_score if provided (should be 1-5)
+      const clarityValue = typeof clarity_score === 'number' && clarity_score >= 1 && clarity_score <= 5 
+        ? Math.round(clarity_score) 
+        : null;
+
+      // Check if AI assessment already exists (from Hens Assessment button)
+      const existing = await pool.query(`SELECT ai_feedback, ai_score FROM submissions WHERE id=$1`, [id]);
+      const hasExistingAssessment = existing.rowCount > 0 && existing.rows[0].ai_feedback && existing.rows[0].ai_feedback !== '[no-content]';
+      
+      if (hasExistingAssessment) {
+        // Keep existing assessment, just update status and clarity_score
+        await pool.query(
+          `UPDATE submissions SET status='submitted', submitted_at=now(), updated_at=now(), clarity_score=$2 WHERE id=$1`,
+          [id, clarityValue]
+        );
+        console.log(`[Submissions] Submitted: ${id}${clarityValue ? `, clarity_score=${clarityValue}` : ''} (keeping existing AI assessment)`);
+      } else {
+        // No existing assessment - clear old ones and trigger new assessment
+        await pool.query(
+          `UPDATE submissions SET status='submitted', submitted_at=now(), updated_at=now(), ai_feedback=NULL, ai_score=NULL, clarity_score=$2 WHERE id=$1`,
+          [id, clarityValue]
+        );
+        console.log(`[Submissions] Submitted: ${id}${clarityValue ? `, clarity_score=${clarityValue}` : ''}`);
+        // Trigger AI auto-grade (best-effort) only if no assessment exists
+        tryAutoGrade(id).catch(() => {});
+      }
       return res.json({ ok: true, status: 'submitted' });
     } catch (e) {
       console.error('Submit error:', e);
@@ -723,6 +784,14 @@ module.exports = (requireAuth) => {
       if (owns.rows[0].teacher_id !== teacherId) return res.status(403).json({ ok: false, error: 'forbidden' });
 
       const newStatus = typeof status === 'string' ? status : 'graded';
+      // Handle empty strings as null to preserve existing feedback
+      const feedbackValue = (typeof educator_feedback === 'string' && educator_feedback.trim()) 
+        ? educator_feedback.trim() 
+        : null;
+      const scoreValue = typeof educator_score === 'number' ? educator_score : null;
+      
+      console.log(`[Grade Submission] Received: score=${scoreValue}, feedback=${typeof educator_feedback}, feedbackValue=${feedbackValue ? `"${feedbackValue.substring(0, 50)}..."` : 'null'}, status=${newStatus}`);
+      
       await pool.query(
         `UPDATE submissions
             SET educator_score = COALESCE($2, educator_score),
@@ -731,8 +800,13 @@ module.exports = (requireAuth) => {
                 graded_at = now(),
                 updated_at = now()
           WHERE id = $1`,
-        [id, educator_score ?? null, educator_feedback ?? null, newStatus]
+        [id, scoreValue, feedbackValue, newStatus]
       );
+      
+      // Verify the update
+      const verify = await pool.query('SELECT educator_score, educator_feedback FROM submissions WHERE id=$1', [id]);
+      const saved = verify.rows[0];
+      console.log(`[Grade Submission] Saved to DB: score=${saved.educator_score}, feedback=${saved.educator_feedback ? `"${saved.educator_feedback.substring(0, 50)}..."` : 'null'}`);
       return res.json({ ok: true });
     } catch (e) {
       console.error('Grade submission error:', e);
@@ -749,8 +823,39 @@ module.exports = (requireAuth) => {
       if (owns.rowCount === 0) return res.status(404).json({ ok: false, error: 'submission not found' });
       if (owns.rows[0].student_id !== studentId) return res.status(403).json({ ok: false, error: 'forbidden' });
 
+      // Get asset info before deleting (to remove from storage)
+      const assetInfo = await pool.query(
+        `SELECT storage_key FROM submission_assets WHERE id=$1 AND submission_id=$2`,
+        [assetId, id]
+      );
+
       const del = await pool.query(`DELETE FROM submission_assets WHERE id=$1 AND submission_id=$2 RETURNING id`, [assetId, id]);
       if (del.rowCount === 0) return res.status(404).json({ ok: false, error: 'asset not found' });
+      
+      // Delete from Supabase Storage if it's a Supabase path
+      if (assetInfo.rowCount > 0 && assetInfo.rows[0].storage_key) {
+        const storageKey = assetInfo.rows[0].storage_key;
+        if (storageKey.startsWith('submissions/')) {
+          try {
+            await supabase.storage.from(STORAGE_BUCKET).remove([storageKey]);
+          } catch (e) {
+            console.error('[Delete] Error removing from Supabase:', e);
+            // Continue even if storage deletion fails
+          }
+        } else {
+          // Legacy filesystem path (backwards compatibility)
+          try {
+            const abs = path.resolve(process.cwd(), storageKey);
+            if (fs.existsSync(abs)) {
+              fs.unlinkSync(abs);
+            }
+          } catch (e) {
+            console.error('[Delete] Error removing legacy file:', e);
+            // Continue even if filesystem deletion fails
+          }
+        }
+      }
+      
       await pool.query('UPDATE submissions SET updated_at=now() WHERE id=$1', [id]);
       return res.json({ ok: true });
     } catch (e) {
@@ -765,101 +870,183 @@ module.exports = (requireAuth) => {
       await ensureExtractedTextColumnOnce();
       const studentId = await getUserIdFromReq(req);
       const { id } = req.params;
-      const owns = await pool.query('SELECT student_id FROM submissions WHERE id=$1', [id]);
-      if (owns.rowCount === 0) return res.status(404).json({ ok: false, error: 'submission not found' });
-      if (owns.rows[0].student_id !== studentId) return res.status(403).json({ ok: false, error: 'forbidden' });
+      const { task_id } = req.body || {};
+      
+      // Check if submission exists and belongs to student
+      let submissionId = id;
+      const owns = await pool.query('SELECT student_id, task_id FROM submissions WHERE id=$1', [id]);
+      if (owns.rowCount === 0) {
+        // If submission doesn't exist but task_id is provided, create it
+        if (task_id) {
+          try {
+            // Check if there's already a draft submission for this task+student
+            const existing = await pool.query(
+              `SELECT id FROM submissions WHERE task_id=$1 AND student_id=$2 ORDER BY created_at DESC LIMIT 1`,
+              [task_id, studentId]
+            );
+            if (existing.rowCount > 0) {
+              submissionId = existing.rows[0].id;
+              console.log(`[Upload] Using existing submission ${submissionId} for task ${task_id}`);
+            } else {
+              const newSub = await pool.query(
+                `INSERT INTO submissions (task_id, student_id, status) VALUES ($1, $2, 'draft') RETURNING id`,
+                [task_id, studentId]
+              );
+              if (newSub.rowCount > 0) {
+                submissionId = newSub.rows[0].id;
+                console.log(`[Upload] Created new submission ${submissionId} for task ${task_id}`);
+              } else {
+                return res.status(500).json({ ok: false, error: 'failed to create submission' });
+              }
+            }
+          } catch (createErr) {
+            console.error('[Upload] Failed to create/find submission:', createErr);
+            return res.status(500).json({ ok: false, error: `submission not found: ${createErr.message || 'unknown error'}` });
+          }
+        } else {
+          return res.status(404).json({ ok: false, error: 'submission not found. Please provide task_id to create a new submission.' });
+        }
+      } else {
+        // Submission exists - verify ownership
+        if (owns.rows[0].student_id !== studentId) {
+          console.error(`[Upload] Forbidden: submission ${id} belongs to user ${owns.rows[0].student_id}, but request is from ${studentId}`);
+          return res.status(403).json({ ok: false, error: 'forbidden: submission does not belong to you' });
+        }
+      }
 
       const files = Array.isArray(req.files) ? req.files : [];
       const exist = await pool.query(
         `SELECT id, storage_key, file_name FROM submission_assets WHERE submission_id=$1 AND asset_type='file'`,
-        [id]
+        [submissionId]
       );
-      const hasStorage = new Set(exist.rows.filter(r => r.storage_key).map(r => r.storage_key));
       const nameMap = new Map(exist.rows.filter(r => r.file_name).map(r => [String(r.file_name).toLowerCase(), r]));
       const saved = [];
-      for (const f of files) {
-        const fileName = f.originalname || f.filename;
-        const fileNameLower = (fileName || '').toLowerCase();
-        const storageKey = path.relative(process.cwd(), f.path).replaceAll('\\','/');
-        if (hasStorage.has(storageKey)) continue;
 
-        // Default replace-if-single behavior: if there is exactly one existing file
-        // and the student uploads exactly one file, treat it as a replacement even
-        // if the filename changed (common flow: overwrite previous attempt).
+      for (const f of files) {
+        if (!f.buffer) {
+          console.error('[Upload] File missing buffer:', f.originalname);
+          continue;
+        }
+
+        const fileName = f.originalname || f.filename || 'file';
+        const fileNameLower = fileName.toLowerCase();
+        const fileBuffer = f.buffer;
+        const fileSize = fileBuffer.length;
+        const mimeType = f.mimetype || 'application/octet-stream';
+
+        // Generate Supabase Storage path: submissions/{submission_id}/{timestamp}-{filename}
+        const timestamp = Date.now();
+        const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storagePath = `submissions/${submissionId}/${timestamp}-${safeFileName}`;
+
+        // Upload to Supabase Storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .upload(storagePath, fileBuffer, {
+            contentType: mimeType,
+            upsert: false
+          });
+
+        if (uploadError) {
+          console.error('[Upload] Supabase upload error:', uploadError);
+          // If bucket doesn't exist, try to create it
+          if (uploadError.message?.includes('Bucket not found') || uploadError.message?.includes('not found')) {
+            console.log('[Upload] Bucket not found, attempting to create...');
+            const { error: createError } = await supabase.storage.createBucket(STORAGE_BUCKET, {
+              public: false,
+              fileSizeLimit: 50 * 1024 * 1024,
+              allowedMimeTypes: null
+            });
+            if (!createError) {
+              // Retry upload after creating bucket
+              const { data: retryData, error: retryError } = await supabase.storage
+                .from(STORAGE_BUCKET)
+                .upload(storagePath, fileBuffer, {
+                  contentType: mimeType,
+                  upsert: false
+                });
+              if (retryError) {
+                console.error('[Upload] Retry after bucket creation failed:', retryError);
+                return res.status(500).json({ ok: false, error: `Failed to upload file: ${retryError.message}` });
+              }
+            } else {
+              console.error('[Upload] Failed to create bucket:', createError);
+              return res.status(500).json({ ok: false, error: `Storage bucket not found. Please create '${STORAGE_BUCKET}' bucket in Supabase Dashboard > Storage, or add SUPABASE_SERVICE_ROLE_KEY to .env` });
+            }
+          } else {
+            return res.status(500).json({ ok: false, error: `Failed to upload file: ${uploadError.message}` });
+          }
+        }
+
+        // Default replace-if-single behavior
         if (files.length === 1 && exist.rows.length === 1 && !nameMap.has(fileNameLower)) {
           const existing = exist.rows[0];
-          try {
-            if (existing.storage_key) {
-              const oldAbs = path.resolve(process.cwd(), existing.storage_key);
-              const isUnderUploads = oldAbs.startsWith(uploadRoot + path.sep) || oldAbs === uploadRoot;
-              if (isUnderUploads && fs.existsSync(oldAbs)) {
-                try { fs.unlinkSync(oldAbs); } catch {}
-              }
-            }
-          } catch {}
+          // Delete old file from Supabase if it exists
+          if (existing.storage_key && existing.storage_key.startsWith('submissions/')) {
+            try {
+              await supabase.storage.from(STORAGE_BUCKET).remove([existing.storage_key]);
+            } catch {}
+          }
+
           const upd = await pool.query(
             `UPDATE submission_assets
                 SET file_name=$2, mime_type=$3, file_size=$4, storage_key=$5, updated_at=now()
               WHERE id=$1
               RETURNING id`,
-            [existing.id, fileName, f.mimetype || null, f.size || null, storageKey]
+            [existing.id, fileName, mimeType, fileSize, storagePath]
           );
           const assetId = upd.rows[0]?.id || existing.id;
+
+          // Extract text from buffer
           try {
-            const abs = path.resolve(process.cwd(), storageKey);
             const maxSize = 8 * 1024 * 1024; // 8MB
-            const stat = fs.statSync(abs);
-            if (stat.size <= maxSize) {
-              let text = await extractTextFromFile(abs, f.mimetype || '', fileName);
+            if (fileSize <= maxSize) {
+              let text = await extractTextFromBuffer(fileBuffer, mimeType, fileName);
               if (text && text.trim()) {
                 if (text.length > 20000) text = text.slice(0, 20000) + '\n...[truncated]';
                 await pool.query('UPDATE submission_assets SET extracted_text=$2 WHERE id=$1', [assetId, text]);
               }
             }
           } catch {}
-          saved.push({ id: assetId, file_name: fileName, mime_type: f.mimetype, file_size: f.size, storage_key: storageKey });
-          nameMap.set(fileNameLower, { id: assetId, storage_key: storageKey, file_name: fileName });
+
+          saved.push({ id: assetId, file_name: fileName, mime_type: mimeType, file_size: fileSize, storage_key: storagePath });
+          nameMap.set(fileNameLower, { id: assetId, storage_key: storagePath, file_name: fileName });
           continue;
         }
 
-        // If a file with the same name already exists for this submission, replace it (update row)
+        // If a file with the same name already exists, replace it
         const existing = nameMap.get(fileNameLower);
         if (existing && existing.id) {
-          // Try to remove old file safely
-          try {
-            if (existing.storage_key) {
-              const oldAbs = path.resolve(process.cwd(), existing.storage_key);
-              const isUnderUploads = oldAbs.startsWith(uploadRoot + path.sep) || oldAbs === uploadRoot;
-              if (isUnderUploads && fs.existsSync(oldAbs)) {
-                try { fs.unlinkSync(oldAbs); } catch {}
-              }
-            }
-          } catch {}
+          // Delete old file from Supabase
+          if (existing.storage_key && existing.storage_key.startsWith('submissions/')) {
+            try {
+              await supabase.storage.from(STORAGE_BUCKET).remove([existing.storage_key]);
+            } catch {}
+          }
 
           const upd = await pool.query(
             `UPDATE submission_assets
                 SET mime_type=$2, file_size=$3, storage_key=$4, updated_at=now()
               WHERE id=$1
               RETURNING id`,
-            [existing.id, f.mimetype || null, f.size || null, storageKey]
+            [existing.id, mimeType, fileSize, storagePath]
           );
           const assetId = upd.rows[0]?.id || existing.id;
-          // Best-effort text extraction for small files
+
+          // Extract text from buffer
           try {
-            const abs = path.resolve(process.cwd(), storageKey);
             const maxSize = 8 * 1024 * 1024; // 8MB
-            const stat = fs.statSync(abs);
-            if (stat.size <= maxSize) {
-              let text = await extractTextFromFile(abs, f.mimetype || '', fileName);
+            if (fileSize <= maxSize) {
+              let text = await extractTextFromBuffer(fileBuffer, mimeType, fileName);
               if (text && text.trim()) {
                 if (text.length > 20000) text = text.slice(0, 20000) + '\n...[truncated]';
                 await pool.query('UPDATE submission_assets SET extracted_text=$2 WHERE id=$1', [assetId, text]);
               }
             }
           } catch {}
-          saved.push({ id: assetId, file_name: fileName, mime_type: f.mimetype, file_size: f.size, storage_key: storageKey });
-          // Update nameMap entry
-          nameMap.set(fileNameLower, { id: assetId, storage_key: storageKey, file_name: fileName });
+
+          saved.push({ id: assetId, file_name: fileName, mime_type: mimeType, file_size: fileSize, storage_key: storagePath });
+          nameMap.set(fileNameLower, { id: assetId, storage_key: storagePath, file_name: fileName });
           continue;
         }
 
@@ -867,30 +1054,32 @@ module.exports = (requireAuth) => {
         const ins = await pool.query(
           `INSERT INTO submission_assets (submission_id, asset_type, file_name, mime_type, file_size, storage_key)
            VALUES ($1,'file',$2,$3,$4,$5) RETURNING id`,
-          [id, fileName, f.mimetype || null, f.size || null, storageKey]
+          [submissionId, fileName, mimeType, fileSize, storagePath]
         );
         const assetId = ins.rows[0]?.id;
-        // Best-effort text extraction for small files
+
+        // Extract text from buffer
         try {
-          const abs = path.resolve(process.cwd(), storageKey);
           const maxSize = 8 * 1024 * 1024; // 8MB
-          const stat = fs.statSync(abs);
-          if (stat.size <= maxSize) {
-            let text = await extractTextFromFile(abs, f.mimetype || '', fileName);
+          if (fileSize <= maxSize) {
+            let text = await extractTextFromBuffer(fileBuffer, mimeType, fileName);
             if (text && text.trim()) {
               if (text.length > 20000) text = text.slice(0, 20000) + '\n...[truncated]';
               await pool.query('UPDATE submission_assets SET extracted_text=$2 WHERE id=$1', [assetId, text]);
             }
           }
         } catch {}
-        saved.push({ id: assetId, file_name: fileName, mime_type: f.mimetype, file_size: f.size, storage_key: storageKey });
-        nameMap.set(fileNameLower, { id: assetId, storage_key: storageKey, file_name: fileName });
+
+        saved.push({ id: assetId, file_name: fileName, mime_type: mimeType, file_size: fileSize, storage_key: storagePath });
+        nameMap.set(fileNameLower, { id: assetId, storage_key: storagePath, file_name: fileName });
       }
+
       await pool.query('UPDATE submissions SET updated_at=now() WHERE id=$1', [id]);
       return res.json({ ok: true, assets: saved });
     } catch (e) {
       console.error('Upload assets error:', e);
-      return res.status(500).json({ ok: false, error: 'failed to upload files' });
+      const errorMsg = e?.message || String(e) || 'failed to upload files';
+      return res.status(500).json({ ok: false, error: errorMsg });
     }
   });
 
@@ -898,7 +1087,6 @@ module.exports = (requireAuth) => {
   router.get('/:id/assets/:assetId/download', requireAuth, async (req, res) => {
     try {
       const { id, assetId } = req.params;
-      // Who is calling
       const currentUserId = await getUserIdFromReq(req);
 
       // Check submission ownership and teacher access
@@ -923,18 +1111,37 @@ module.exports = (requireAuth) => {
       );
       if (a.rowCount === 0) return res.status(404).json({ ok: false, error: 'asset not found' });
       const asset = a.rows[0];
-      if (!asset.storage_key) return res.status(400).json({ ok: false, error: 'no file on server for this asset' });
+      if (!asset.storage_key) return res.status(400).json({ ok: false, error: 'no file stored for this asset' });
 
-      const fileAbs = path.resolve(process.cwd(), asset.storage_key);
-      // Safety: only serve from uploads/
-      const isUnderUploads = fileAbs.startsWith(uploadRoot + path.sep) || fileAbs === uploadRoot;
-      if (!isUnderUploads) return res.status(400).json({ ok: false, error: 'invalid path' });
-      if (!fs.existsSync(fileAbs)) return res.status(404).json({ ok: false, error: 'file missing' });
+      // Check if it's a Supabase Storage path
+      if (asset.storage_key.startsWith('submissions/')) {
+        // Download from Supabase Storage
+        const { data, error } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .download(asset.storage_key);
 
-      const filename = asset.file_name || path.basename(fileAbs);
-      res.setHeader('Content-Type', asset.mime_type || 'application/octet-stream');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename.replace(/"/g, '\"')}"`);
-      return res.sendFile(fileAbs);
+        if (error || !data) {
+          console.error('[Download] Supabase error:', error);
+          return res.status(404).json({ ok: false, error: 'file not found in storage' });
+        }
+
+        // Convert blob to buffer
+        const arrayBuffer = await data.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+
+        const filename = asset.file_name || path.basename(asset.storage_key);
+        res.setHeader('Content-Type', asset.mime_type || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename.replace(/"/g, '\"')}"`);
+        return res.send(buffer);
+      } else {
+        // Legacy filesystem path (for backwards compatibility during migration)
+        const fileAbs = path.resolve(process.cwd(), asset.storage_key);
+        if (!fs.existsSync(fileAbs)) return res.status(404).json({ ok: false, error: 'file missing' });
+        const filename = asset.file_name || path.basename(fileAbs);
+        res.setHeader('Content-Type', asset.mime_type || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename.replace(/"/g, '\"')}"`);
+        return res.sendFile(fileAbs);
+      }
     } catch (e) {
       console.error('Download asset error:', e);
       return res.status(500).json({ ok: false, error: 'failed to download asset' });

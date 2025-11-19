@@ -84,6 +84,16 @@ export async function publishTask(taskId: string) {
   return r.json();
 }
 
+export async function closeTask(taskId: string) {
+  const token = await getToken();
+  const r = await fetch(`${BACKEND_URL}/api/tasks/${taskId}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ status: 'archived' }),
+  });
+  return r.json();
+}
+
 export type TaskListItem = {
   id: string;
   task_title: string;
@@ -95,6 +105,8 @@ export type TaskListItem = {
   share_slug?: string | null;
   updated_at?: string;
   link?: string | null;
+  submission_count?: number;
+  avg_clarity_score?: number | null;
 };
 
 export async function listTasks(): Promise<{ ok: boolean; tasks: TaskListItem[] }> {
@@ -113,7 +125,7 @@ export async function getTaskForm(taskId: string): Promise<{ ok: boolean; task: 
   return r.json();
 }
 
-export async function getTaskEnrollments(taskId: string): Promise<{ ok: boolean; enrollments: Array<{ user_id: string; first_name?: string; last_name?: string; email?: string; picture?: string; enrolled_at: string }> }> {
+export async function getTaskEnrollments(taskId: string): Promise<{ ok: boolean; enrollments: Array<{ user_id: string; name?: string; email?: string; picture?: string; enrolled_at: string }> }> {
   const token = await getToken();
   const r = await fetch(`${BACKEND_URL}/api/tasks/${taskId}/enrollments`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -121,7 +133,7 @@ export async function getTaskEnrollments(taskId: string): Promise<{ ok: boolean;
   return r.json();
 }
 
-export async function getTaskSubmissions(taskId: string): Promise<{ ok: boolean; submissions: any[] }> {
+export async function getTaskSubmissions(taskId: string): Promise<{ ok: boolean; submissions: any[]; avg_clarity_score?: number | null }> {
   const token = await getToken();
   const r = await fetch(`${BACKEND_URL}/api/tasks/${taskId}/submissions`, {
     headers: { Authorization: `Bearer ${token}` },

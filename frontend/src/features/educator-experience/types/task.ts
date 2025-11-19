@@ -19,11 +19,15 @@ export interface TaskFormData {
 export interface Task {
   id: string | number;
   title: string;
-  dueDate: number;
+  dueDate: number | string | Date | null;
+  dueAt?: string | null;
+  opensAt?: string | null;
+  updatedAt?: string | null;
   submissions?: number;
   timeLeft?: string;
   clarityScore?: number;
   isDraft?: boolean;
+  isArchived?: boolean; // True if task is archived/closed
   formData?: TaskFormData;
 }
 

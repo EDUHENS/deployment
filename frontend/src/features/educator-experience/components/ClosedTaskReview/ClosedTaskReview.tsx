@@ -1,8 +1,5 @@
 'use client';
 
-// TODO(db): Replace any mock-derived props with API data for closed tasks.
-// - Load submissions and educator decisions for closed/overdue tasks
-
 import { useState, useEffect } from 'react';
 import { Layout3, Header } from '../../../../shared/components/layout';
 import { SubmissionsTable, Pagination, SummaryCard } from '../../../../shared/components/ui';
@@ -99,19 +96,9 @@ export default function ClosedTaskReview({
     }
   };
 
-  // Generate mock schedule for closed tasks (less colorful)
-  const generateMockSchedule = (dueDate: number) => {
-    const now = new Date();
-    const startDate = new Date(now.getTime() + (dueDate + 5) * 24 * 60 * 60 * 1000); // 5 days before due
-    const endDate = new Date(now.getTime() + dueDate * 24 * 60 * 60 * 1000);
-    
-    return {
-      startDate,
-      endDate
-    };
-  };
-
-  const schedule = generateMockSchedule(task.dueDate);
+  const scheduledStart = task.opensAt ? new Date(task.opensAt) : null;
+  const scheduledEnd = task.dueAt ? new Date(task.dueAt) : null;
+  const clarityRating = typeof task.clarityScore === 'number' ? task.clarityScore : null;
 
   return (
     <>
@@ -121,8 +108,8 @@ export default function ClosedTaskReview({
           title=""
           subtitle="Review Closed Task"
           taskTitle={task.title}
-          scheduledStart={schedule.startDate}
-          scheduledEnd={schedule.endDate}
+          scheduledStart={scheduledStart}
+          scheduledEnd={scheduledEnd}
           actions={null}
         />
       }
@@ -149,16 +136,20 @@ export default function ClosedTaskReview({
               title="Task Clarity"
               className="bg-[#fefce8] border-[#fde047] text-[#713f12]"
             >
-              <div className="content-stretch flex gap-[4px] items-start relative shrink-0">
-                {Array.from({ length: 5 }, (_, index) => (
-                  <div
-                    key={index}
-                    className={`w-[15px] h-[15px] rounded-full ${
-                      index < (task.clarityScore || 4) ? 'bg-yellow-400' : 'bg-gray-300'
-                    }`}
-                  ></div>
-                ))}
-              </div>
+              {clarityRating !== null ? (
+                <div className="content-stretch flex gap-[4px] items-start relative shrink-0">
+                  {Array.from({ length: 5 }, (_, index) => (
+                    <div
+                      key={index}
+                      className={`w-[15px] h-[15px] rounded-full ${
+                        index < clarityRating ? 'bg-yellow-400' : 'bg-gray-300'
+                      }`}
+                    ></div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-[#713f12]">No clarity data</p>
+              )}
             </SummaryCard>
 
             {/* Assessment Results */}

@@ -38,7 +38,7 @@ export default function DashboardSelectionPage() {
     
     try {
       setIsAssigningRole(true);
-      sessionStorage.setItem('eduhens.lastDashboard', type);
+      // Dashboard selection is handled via role assignment, no need for sessionStorage
       console.log('[DashboardSelection] Selected dashboard type:', type);
       
       // Assign the appropriate role to the user

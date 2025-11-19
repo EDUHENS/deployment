@@ -2,6 +2,7 @@
 
 import { ReactNode } from 'react';
 import { Sidebar } from '../../../features/navigation';
+import { Loader2 } from 'lucide-react';
 // Use original CSS spinner (in App.css) instead of mascot face
 import type { Task } from '../../../features/educator-experience/types';
 
@@ -27,6 +28,8 @@ export interface MainLayoutProps {
   audience?: 'student' | 'educator';
   /** Global loading overlay */
   isLoading?: boolean;
+  /** Whether sidebar tasks are still loading */
+  isTasksLoading?: boolean;
 }
 
 export default function MainLayout({
@@ -45,6 +48,7 @@ export default function MainLayout({
   onProfileUpdated,
   audience,
   isLoading = false,
+  isTasksLoading = false,
 }: MainLayoutProps) {
   return (
     <div className="bg-[#E6E6E6] h-screen max-h-screen grid grid-cols-[auto_1fr] gap-px overflow-hidden">
@@ -63,13 +67,14 @@ export default function MainLayout({
         onLogout={onLogout}
         onProfileUpdated={onProfileUpdated}
         audience={audience}
+        isTasksLoading={isTasksLoading}
       />
 
       {/* Layout1 */}
       {mainDashboard}
       {isLoading ? (
-        <div className="fixed inset-0 z-[2000] flex items-center justify-center pointer-events-none">
-          <div className="hens-spinner hens-spinner--lg" />
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center pointer-events-none bg-black/20 backdrop-blur-sm">
+          <Loader2 className="w-12 h-12 animate-spin text-[#484de6]" />
         </div>
       ) : null}
     </div>

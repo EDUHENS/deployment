@@ -1,7 +1,9 @@
 'use client';
 
-import { CircleX, Rocket } from 'lucide-react';
+import PublishButton from '@/shared/components/ui/PublishButton';
+import CloseButton from '@/shared/components/ui/CloseButton';
 import type { TaskFormData } from '../../types';
+import { parseResourceLink } from '@/shared/utils/resourceLinks';
 
 interface PreviewModalProps {
   isOpen: boolean;
@@ -17,12 +19,7 @@ export default function PreviewModal({ isOpen, onClose, taskData, onPublish }: P
     <div className="fixed inset-0 bg-black/10 backdrop-blur-sm flex items-center justify-center z-50 p-8">
       <div className="bg-[#f8f8f8] border-4 border-[#cccccc] border-solid relative rounded-[32px] w-full h-[90vh] max-w-6xl flex flex-col overflow-hidden">
         {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute right-4 top-4 z-10 text-gray-400 hover:text-gray-600 hover:animate-rotate-360 transition-colors duration-200 cursor-pointer"
-        >
-          <CircleX className="w-6 h-6" />
-        </button>
+        <CloseButton onClick={onClose} className="absolute right-4 top-4 z-10" size="sm" />
 
         {/* Student Preview Badge */}
         <div className="absolute bg-[#f8f8f8] border-2 border-[#cccccc] border-solid flex items-center justify-center left-1/2 top-4 px-4 py-2 rounded-[24px] -translate-x-1/2">
@@ -114,16 +111,31 @@ export default function PreviewModal({ isOpen, onClose, taskData, onPublish }: P
                 <h2 className="font-['Helvetica_Neue:Bold',sans-serif] text-[#222222] text-[16px] tracking-[0.32px]">
                   📚 Resources to Help You
                 </h2>
-                <div className="space-y-2">
-                  {taskData.resources.map((resource, index) => (
-                    resource.trim() && (
-                      <div key={index} className="flex items-start gap-2">
-                        <span className="text-[#484de6] text-[14px] tracking-[0.28px] leading-[1.5] underline">
-                          {resource}
+                <div className="space-y-3">
+                  {taskData.resources
+                    .map((resource) => parseResourceLink(resource))
+                    .filter(Boolean)
+                    .map((resource, index) => (
+                      <div key={index} className="flex flex-col gap-1">
+                        <span className="text-[#414651] text-[14px] font-medium tracking-[0.28px] leading-[1.5]">
+                          {resource!.title}
                         </span>
+                        {resource!.href ? (
+                          <a
+                            href={resource!.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[#484de6] text-[14px] tracking-[0.28px] leading-[1.5] underline break-all hover:text-[#2f35c4]"
+                          >
+                            {resource!.displayUrl ?? resource!.href}
+                          </a>
+                        ) : (
+                          <span className="text-[#414651] text-[14px] tracking-[0.28px] leading-[1.5]">
+                            {resource!.title}
+                          </span>
+                        )}
                       </div>
-                    )
-                  ))}
+                    ))}
                 </div>
               </div>
             )}
@@ -255,16 +267,10 @@ export default function PreviewModal({ isOpen, onClose, taskData, onPublish }: P
 
             {/* Publish Button - Standard corporate padding */}
             <div className="absolute bottom-6 left-6 right-6 flex justify-center">
-              <button 
-                onClick={onPublish}
-                className="bg-[#484de6] border-[#6976eb] border-[3px] border-solid box-border content-stretch cursor-pointer flex gap-[7px] items-center justify-center px-[32px] py-[20px] relative rounded-[4px] hover:bg-[#3A3FE4] transition-colors duration-200">
-                <div className="relative shrink-0 size-[16px]">
-                  <Rocket className="w-4 h-4 text-[#f8f8f8]" />
-                </div>
-                <span className="font-['Helvetica_Neue:Regular',sans-serif] leading-[normal] not-italic relative shrink-0 text-[#f8f8f8] text-[16px] text-nowrap whitespace-pre">
-                  Publish Task
-                </span>
-              </button>
+              <PublishButton
+                onClick={onPublish || (() => {})}
+                className="px-[32px] py-[20px]"
+              />
             </div>
           </div>
         </div>

@@ -35,7 +35,8 @@ app.use(cors({
     'https://v1-hakan-asmaoglu-hakans-projects-ac4539c6.vercel.app'
   ], 
   credentials: true })); 
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ limit: '5mb', extended: true }));
 app.use(cookieParser());
 app.use(compression());
 app.use(morgan('dev'));
@@ -113,7 +114,9 @@ if (require.main === module) {
   const PORT = process.env.PORT || 5001;
   app.listen(PORT, () => {
     console.log(`API listening on http://localhost:${PORT}`);
-    console.log(`Connected to database: ${process.env.DB_NAME}`);
+    const dbUrl = process.env.DATABASE_URL || `${process.env.DB_HOST || 'localhost'}/${process.env.DB_NAME || 'Eduhens'}`;
+    const isSupabase = dbUrl.includes('supabase.com') || dbUrl.includes('aws-');
+    console.log(`Database: ${isSupabase ? '✅ Supabase' : '⚠️  Local'} (${dbUrl.replace(/:[^:@]+@/, ':****@')})`);
   });
 }
 

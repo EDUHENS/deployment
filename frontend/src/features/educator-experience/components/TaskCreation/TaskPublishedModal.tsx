@@ -1,6 +1,7 @@
 'use client';
 
-import { CircleX, Calendar, Clock } from 'lucide-react';
+import { Calendar, Clock } from 'lucide-react';
+import CloseButton from '@/shared/components/ui/CloseButton';
 
 interface TaskPublishedModalProps {
   isOpen: boolean;
@@ -38,12 +39,7 @@ export default function TaskPublishedModal({
     <div className="fixed inset-0 bg-black/10 backdrop-blur-sm flex items-center justify-center z-50 p-8">
       <div className="bg-[#f8f8f8] border-4 border-[#cccccc] border-solid relative rounded-[32px] w-full h-auto max-w-2xl flex flex-col overflow-hidden">
         {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute right-4 top-4 z-10 text-gray-400 hover:text-gray-600 hover:animate-rotate-360 transition-colors duration-200 cursor-pointer"
-        >
-          <CircleX className="w-6 h-6" />
-        </button>
+        <CloseButton onClick={onClose} className="absolute right-4 top-4 z-10" size="sm" />
 
         {/* Content */}
         <div className="flex flex-col gap-8 items-center p-12">

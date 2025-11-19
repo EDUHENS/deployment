@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -32,6 +33,10 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+.font-nunito {
+  font-family: 'Nunito Sans', 'Nunito', sans-serif !important;
 }
 
 /* Ensure backdrop-blur works properly */
@@ -128,6 +133,21 @@ body {
 
 .animate-float {
   animation: float 3s ease-in-out infinite;
+}
+
+@keyframes toast-slide-in {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.toast-slide-in {
+  animation: toast-slide-in 0.3s ease forwards;
 }
 
 /* Modern hover animations with best practices */
@@ -671,4 +691,31 @@ p, span, div, h1, h2, h3, h4, h5, h6, button, input, textarea, select, label {
   font-stretch: normal;
   letter-spacing: normal;
   line-height: normal;
+}
+
+/* RGB Border Animation for AI Input Box (Gaming Keyboard Style) */
+/* Hover: Subtle orange and blue animation */
+@keyframes rgb-border-hover {
+  0% {
+    background-position: center, -200% 50%;
+  }
+  50% {
+    background-position: center, 200% 50%;
+  }
+  100% {
+    background-position: center, -200% 50%;
+  }
+}
+
+/* Focus: Slow multi-color animation (very subtle, non-distracting) */
+@keyframes rgb-border-focus {
+  0% {
+    background-position: center, -200% 50%;
+  }
+  50% {
+    background-position: center, 200% 50%;
+  }
+  100% {
+    background-position: center, -200% 50%;
+  }
 }

@@ -14,7 +14,7 @@ export interface TaskCreationFormProps {
 
 export default function TaskCreationForm({ data, onChange }: TaskCreationFormProps) {
   return (
-    <div className="relative flex flex-col gap-10 items-start p-6 w-full max-h-screen overflow-y-auto pt-8 pb-32">
+    <div className="relative flex flex-col gap-10 items-start p-6 w-full max-h-screen overflow-y-auto pt-8 pb-[400px]">
       {/* Task Title */}
       <FormInput
         title="Task Title"

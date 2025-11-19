@@ -49,11 +49,20 @@ module.exports = (requireAuth) => {
     try {
       const userId = await getUserIdFromReq(req);
       const r = await pool.query(
-        `SELECT t.id, t.task_title, t.objective, t.due_at, t.level, t.academic_integrity
-           FROM task_enrollments e
-           JOIN tasks t ON t.id = e.task_id
-          WHERE e.user_id = $1
-          ORDER BY t.updated_at DESC`,
+        `SELECT 
+            t.id,
+            t.task_title,
+            t.objective,
+            t.due_at,
+            t.level,
+            t.academic_integrity,
+            u.name AS teacher_name,
+            u.picture AS teacher_picture
+         FROM task_enrollments e
+         JOIN tasks t ON t.id = e.task_id
+         LEFT JOIN users u ON u.id = t.teacher_id
+        WHERE e.user_id = $1
+        ORDER BY t.updated_at DESC`,
         [userId]
       );
       return res.json({ ok: true, tasks: r.rows });

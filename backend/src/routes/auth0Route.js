@@ -207,13 +207,14 @@ module.exports = (requireAuth) => {
       const roleNames = roles.map(r => r.role);
       const primaryRole = await userModel.getPrimaryRole(user.id);
       
+      const displayName = (user.name || '').trim() || user.email || 'User';
       res.json({ 
         ok: true, 
         user: {
           id: user.id,
           email: user.email,
-          first_name: user.first_name,
-          last_name: user.last_name,
+          name: displayName,
+          full_name: displayName,
           email_verified: user.email_verified,
           picture: user.picture,
           created_at: user.created_at,
@@ -228,24 +229,20 @@ module.exports = (requireAuth) => {
     }
   });
 
-  // Update current user's profile (first_name, last_name, picture)
+  // Update current user's profile (name, picture)
   router.patch('/me', requireAuth, async (req, res) => {
     try {
       const claims = req.auth.payload;
       const user = await userModel.findByAuth0Id(claims.sub);
       if (!user) return res.status(404).json({ ok: false, error: 'User not found' });
 
-      const { first_name, last_name, picture, full_name } = req.body || {};
-      let fn = first_name, ln = last_name;
-      if ((!fn || !ln) && typeof full_name === 'string' && full_name.trim()) {
-        const parts = full_name.trim().split(/\s+/);
-        fn = fn || parts.shift();
-        ln = ln || parts.join(' ');
-      }
+      const { name, full_name, picture } = req.body || {};
+      const trimmedName = [name, full_name]
+        .find((val) => typeof val === 'string' && val.trim().length > 0);
+      const normalizedName = typeof trimmedName === 'string' ? trimmedName.trim() : undefined;
 
       const updated = await userModel.updateUserProfile(user.id, {
-        first_name: typeof fn === 'string' ? fn : undefined,
-        last_name: typeof ln === 'string' ? ln : undefined,
+        name: normalizedName,
         picture: typeof picture === 'string' ? picture : undefined,
       });
 
@@ -254,13 +251,14 @@ module.exports = (requireAuth) => {
       const roleNames = roles.map(r => r.role);
       const primaryRole = await userModel.getPrimaryRole(updated.id);
 
+      const displayName = (updated.name || '').trim() || updated.email || 'User';
       res.json({
         ok: true,
         user: {
           id: updated.id,
           email: updated.email,
-          first_name: updated.first_name,
-          last_name: updated.last_name,
+          name: displayName,
+          full_name: displayName,
           email_verified: updated.email_verified,
           picture: updated.picture,
           created_at: updated.created_at,
@@ -338,8 +336,7 @@ module.exports = (requireAuth) => {
         user: {
           id: user.id,
           email: user.email,
-          first_name: user.first_name,  
-          last_name: user.last_name     
+          name: user.name
         }
       });
     } catch (error) {
@@ -466,7 +463,7 @@ module.exports = (requireAuth) => {
     try {
       const result = await pool.query(`
         SELECT 
-          u.id, u.email, u.first_name, u.last_name, u.email_verified, u.created_at,
+          u.id, u.email, u.name, u.email_verified, u.created_at,
           COALESCE(
             json_agg(DISTINCT ur.role) FILTER (WHERE ur.role IS NOT NULL), 
             '[]'

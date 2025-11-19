@@ -14,8 +14,7 @@ import { assignUserRole, listUsers, removeUserRole } from '@/services/authApi';
 type UserRow = {
   id: string;
   email: string;
-  first_name?: string;
-  last_name?: string;
+  name?: string;
   picture?: string;
   roles: string[];
 };
@@ -89,7 +88,7 @@ export default function AdminRolesPage() {
               <tr key={u.id} className="border-t">
                 <td className="px-4 py-2 flex items-center gap-2">
                   {u.picture && <img src={u.picture} alt="" className="w-6 h-6 rounded-full" />}
-                  <span>{u.first_name || ''} {u.last_name || ''}</span>
+                  <span>{u.name || ''}</span>
                 </td>
                 <td className="px-4 py-2">{u.email}</td>
                 {ALL_ROLES.map((r) => {

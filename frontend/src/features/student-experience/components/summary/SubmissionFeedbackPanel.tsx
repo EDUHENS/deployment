@@ -6,33 +6,26 @@ import type { StudentSubmissionDraft, StudentTaskSummary } from '@/features/stud
 interface SubmissionFeedbackPanelProps {
   summary?: StudentTaskSummary | null;
   submission: StudentSubmissionDraft;
-  fallbackEducatorFeedback: string;
-  fallbackAIAssessment: string[];
-  fallbackAISummary: string;
-  fallbackAttachments?: AttachmentMeta[];
 }
 
 /**
  * Right-rail block for closed tasks: educator feedback, student notes, attachments, and AI assessment.
  */
-export default function SubmissionFeedbackPanel({
-  summary,
-  submission,
-  fallbackEducatorFeedback,
-  fallbackAIAssessment,
-  fallbackAISummary,
-  fallbackAttachments = [],
-}: SubmissionFeedbackPanelProps) {
-  const educatorFeedback = summary?.feedback?.educatorFeedback ?? fallbackEducatorFeedback;
-  const aiAssessment = summary?.feedback?.aiAssessment ?? fallbackAIAssessment;
-  const attachments = buildAttachments(submission, fallbackAttachments);
+export default function SubmissionFeedbackPanel({ summary, submission }: SubmissionFeedbackPanelProps) {
+  const educatorFeedback = summary?.feedback?.educatorFeedback?.trim();
+  const aiAssessment = Array.isArray(summary?.feedback?.aiAssessment)
+    ? summary?.feedback?.aiAssessment
+    : [];
+  const attachments = buildAttachments(submission);
 
   return (
     <aside className="flex h-full min-h-0 flex-col gap-8 overflow-y-auto rounded-3xl bg-[#f8f8f8] px-10 py-8">
       <section className="flex flex-col gap-4">
         <h3 className="text-base font-semibold text-[#444ce7]">Educator Feedback</h3>
         <div className="rounded-2xl border border-[#c9d4ff] bg-white px-6 py-5">
-          <p className="text-base leading-[1.6] text-[#414651]">{educatorFeedback}</p>
+          <p className="text-base leading-[1.6] text-[#414651]">
+            {educatorFeedback || 'No educator feedback available yet.'}
+          </p>
         </div>
       </section>
 
@@ -41,16 +34,17 @@ export default function SubmissionFeedbackPanel({
         <div className="flex flex-col gap-3">
           <div className="rounded-2xl border border-[#e9eaeb] bg-white px-6 py-5">
             <p className="text-base leading-[1.6] text-[#717680]">
-              {submission.notes ||
-                "I've completed everything yet wanted to submit early so I can have time to modify."}
+              {submission.notes?.trim() || 'No submission notes provided.'}
             </p>
           </div>
-          {attachments.length > 0 && (
+          {attachments.length > 0 ? (
             <div className="flex gap-3">
               {attachments.map((attachment) => (
                 <AttachmentBadge key={attachment.id} type={attachment.type} label={attachment.label} />
               ))}
             </div>
+          ) : (
+            <p className="text-sm text-[#717680]">No files or links submitted.</p>
           )}
         </div>
       </section>
@@ -60,15 +54,16 @@ export default function SubmissionFeedbackPanel({
           <span>Hens(AI) </span>Assessment
         </h3>
         <div className="rounded-2xl border border-[#e9eaeb] bg-white px-6 py-6">
-          <ul className="flex flex-col gap-3 text-base leading-[1.6] text-[#414651]">
-            {aiAssessment.map((item, index) => (
-              <li key={`${item}-${index}`} className="ml-6 list-disc">
-                {item}
-              </li>
-            ))}
-          </ul>
-          {summary?.feedback?.aiAssessment == null && (
-            <p className="mt-4 text-base leading-[1.6] text-[#414651]">{fallbackAISummary}</p>
+          {aiAssessment && aiAssessment.length > 0 ? (
+            <ul className="flex flex-col gap-3 text-base leading-[1.6] text-[#414651]">
+              {aiAssessment.map((item, index) => (
+                <li key={`${item}-${index}`} className="ml-6 list-disc">
+                  {item}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-base leading-[1.6] text-[#414651]">AI assessment not available yet.</p>
           )}
         </div>
       </section>
@@ -84,12 +79,9 @@ interface AttachmentMeta {
   type: AttachmentType;
 }
 
-function buildAttachments(
-  submission: StudentSubmissionDraft,
-  fallbackAttachments: AttachmentMeta[],
-): AttachmentMeta[] {
+function buildAttachments(submission: StudentSubmissionDraft): AttachmentMeta[] {
   if (submission.files.length === 0 && submission.links.length === 0) {
-    return fallbackAttachments.slice(0, 2);
+    return [];
   }
 
   const fileBadges = submission.files.map((file) => ({

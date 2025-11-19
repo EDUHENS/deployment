@@ -1,32 +1,72 @@
 'use client';
 
-import { useState } from 'react';
-import { CircleX, Calendar } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Calendar } from 'lucide-react';
 import { DateTimePicker } from '../../../../shared/components/ui';
+import CloseButton from '@/shared/components/ui/CloseButton';
+import { getFinlandTime, toFinlandTime } from '../../../shared/hooks/useRealtimeDate';
 
 interface TaskScheduleModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (startDate: Date | null, endDate: Date | null, startTime?: string, endTime?: string) => void;
+  initialStartDate?: Date | null;
+  initialEndDate?: Date | null;
 }
 
-export default function TaskScheduleModal({ isOpen, onClose, onSave }: TaskScheduleModalProps) {
+export default function TaskScheduleModal({ isOpen, onClose, onSave, initialStartDate, initialEndDate }: TaskScheduleModalProps) {
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+  const [currentFinlandTime, setCurrentFinlandTime] = useState(getFinlandTime());
+
+  // Initialize with existing schedule when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setStartDate(initialStartDate ? new Date(initialStartDate) : undefined);
+      setEndDate(initialEndDate ? new Date(initialEndDate) : undefined);
+    }
+  }, [isOpen, initialStartDate, initialEndDate]);
+
+  // Update current Finland time every second for real-time validation
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    setCurrentFinlandTime(getFinlandTime());
+    const interval = setInterval(() => {
+      setCurrentFinlandTime(getFinlandTime());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isOpen]);
+
+  // Get minimum date/time (current Finland time)
+  const getMinDate = () => {
+    return currentFinlandTime;
+  };
 
   const handleSave = () => {
-    // Guard: start date cannot be before today (00:00)
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    if (startDate && startDate < todayStart) {
-      alert('Start date cannot be before today.');
-      return;
+    // Guard: start date/time cannot be before current Finland time
+    if (startDate) {
+      const startFinland = toFinlandTime(startDate);
+      const nowFinland = toFinlandTime(currentFinlandTime);
+      
+      if (startFinland < nowFinland) {
+        alert('Start date and time cannot be before the current moment. Please select a future date and time.');
+        return;
+      }
     }
+    
     // Guard: end date cannot be before start date
-    if (startDate && endDate && endDate < startDate) {
-      alert('End date cannot be before start date.');
-      return;
+    if (startDate && endDate) {
+      const startFinland = toFinlandTime(startDate);
+      const endFinland = toFinlandTime(endDate);
+      
+      if (endFinland < startFinland) {
+        alert('End date and time cannot be before start date and time.');
+        return;
+      }
     }
+    
     const startTime = startDate ? startDate.toTimeString().slice(0, 5) : undefined;
     const endTime = endDate ? endDate.toTimeString().slice(0, 5) : undefined;
     onSave(startDate || null, endDate || null, startTime, endTime);
@@ -39,12 +79,7 @@ export default function TaskScheduleModal({ isOpen, onClose, onSave }: TaskSched
     <div className="fixed inset-0 bg-black/10 backdrop-blur-sm flex items-center justify-center z-50 p-8">
       <div className="bg-[#f8f8f8] border-4 border-[#cccccc] border-solid relative rounded-[32px] w-full max-w-3xl flex flex-col">
         {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute right-4 top-4 z-10 text-gray-400 hover:text-gray-600 hover:animate-rotate-360 transition-colors duration-200 cursor-pointer"
-        >
-          <CircleX className="w-6 h-6" />
-        </button>
+        <CloseButton onClick={onClose} className="absolute right-4 top-4 z-10" size="sm" />
 
         {/* Content */}
         <div className="flex flex-col gap-8 p-12">
@@ -69,7 +104,7 @@ export default function TaskScheduleModal({ isOpen, onClose, onSave }: TaskSched
                 date={startDate}
                 setDate={setStartDate}
                 placeholder="Select start date and time"
-                minDate={new Date()}
+                minDate={getMinDate()}
               />
             </div>
 
