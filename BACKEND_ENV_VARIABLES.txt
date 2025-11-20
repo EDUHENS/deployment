@@ -1,0 +1,43 @@
+# Environment Variables for Backend Vercel Project
+# Copy these into: Vercel Dashboard → eduhens-api → Settings → Environment Variables
+# Select: Production, Preview, Development for each
+
+# ============================================
+# DATABASE (SUPABASE)
+# ============================================
+DATABASE_URL=postgresql://postgres.pehimhjaimqfmzltmhmx:As8SAjjdWBV4*3N@aws-1-eu-west-1.pooler.supabase.com:5432/postgres
+
+# ============================================
+# SUPABASE
+# ============================================
+SUPABASE_URL=https://pehimhjaimqfmzltmhmx.supabase.co
+
+# TODO: Get this from your local backend/.env file
+SUPABASE_SERVICE_ROLE_KEY=<YOUR_SUPABASE_SERVICE_ROLE_KEY>
+
+# ============================================
+# AUTH0 (Backend Token Validation)
+# ============================================
+AUTH0_DOMAIN=dev-lrhaxesvwpyqa5me.us.auth0.com
+AUTH0_AUDIENCE=https://api.eduhens.reset
+
+# ============================================
+# OPENAI (AI Features)
+# ============================================
+# TODO: Get this from your local backend/.env file
+OPENAI_API_KEY=<YOUR_OPENAI_API_KEY>
+
+# ============================================
+# APP CONFIGURATION
+# ============================================
+NODE_ENV=production
+AI_AUTOGRADE=1
+PORT=5001
+
+# ============================================
+# OPTIONAL: If you need to whitelist frontend
+# ============================================
+# These are handled by CORS in backend/src/app.js
+# But if needed:
+# FRONTEND_URL=https://eduhens.vercel.app
+
