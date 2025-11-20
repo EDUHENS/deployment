@@ -1,1 +1,5 @@
+# Ignore backend folder - it's synced into frontend/.backend during build
+backend/
 
+# Ignore root-level configs that might cause duplicate deployments
+vercel.json
