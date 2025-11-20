@@ -4,9 +4,7 @@
 // - /api/auth/logout
 // - /api/auth/me
 // - /api/auth/access-token
-import { Auth0Client } from '@auth0/nextjs-auth0/server';
+import { auth0 } from '@/lib/auth0';
 
-const auth0 = new Auth0Client();
-
-export const GET = auth0.handleAuth();
+export const GET = auth0.handleAuth;
 
