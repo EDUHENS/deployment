@@ -1,6 +1,6 @@
 {
   "rewrites": [
-    { "source": "/api-backend/:path*", "destination": "/api" }
+    { "source": "/api-backend/:path*", "destination": "/api/index" }
   ],
   "functions": {
     "api/index.js": {
