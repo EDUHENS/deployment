@@ -6,8 +6,8 @@
   },
   "rewrites": [
     {
-      "source": "/api-backend/(.*)",
-      "destination": "/api/$1"
+      "source": "/api-backend/:path*",
+      "destination": "/api/index/:path*"
     }
   ]
 }
