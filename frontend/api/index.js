@@ -24,4 +24,3 @@ if (!loadedApp) {
 }
 
 module.exports = loadedApp;
-

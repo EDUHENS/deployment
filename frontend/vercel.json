@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api-backend/index.js": {
+    "api/index.js": {
       "includeFiles": "../backend/**"
     }
   }
