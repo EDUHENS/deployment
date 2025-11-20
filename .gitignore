@@ -50,3 +50,4 @@ dist-ssr/
 backend/test-*.js
 backend/debug-*.js
 .env*.local
+VERCEL_ENV_VALUES.txt

@@ -1,7 +1,10 @@
 /** @type {import('next').NextConfig} */
+const path = require('path');
 
 const nextConfig = {
   allowedDevOrigins: ['localhost', '192.168.100.45'],
+  // Fix workspace root detection for monorepo
+  outputFileTracingRoot: path.join(__dirname, '../'),
   // Completely disable ESLint during builds (Vercel deployment)
   eslint: {
     ignoreDuringBuilds: true,
