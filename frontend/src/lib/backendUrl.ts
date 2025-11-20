@@ -8,10 +8,10 @@ export function getBackendUrl() {
       return process.env.INTERNAL_BACKEND_URL;
     }
     if (process.env.VERCEL_URL) {
-      return `https://${process.env.VERCEL_URL}/api-backend`;
+      return `https://${process.env.VERCEL_URL}/api`;
     }
     return 'http://localhost:5001';
   }
 
-  return '/api-backend';
+  return '/api';
 }

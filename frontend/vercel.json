@@ -1,7 +1,8 @@
 {
   "functions": {
     "api/index.js": {
-      "includeFiles": "../backend/**"
+      "includeFiles": "../backend/**",
+      "maxDuration": 30
     }
   }
 }
