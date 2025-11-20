@@ -1,13 +1,7 @@
 {
   "functions": {
-    "api/index.js": {
+    "api-backend/index.js": {
       "includeFiles": "../backend/**"
     }
-  },
-  "rewrites": [
-    {
-      "source": "/api-backend/:path*",
-      "destination": "/api/index/:path*"
-    }
-  ]
+  }
 }
