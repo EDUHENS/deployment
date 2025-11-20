@@ -8,8 +8,11 @@ const targetDir = path.join(frontendRoot, '.backend');
 const sourceSrc = path.join(sourceDir, 'src');
 
 if (!fs.existsSync(sourceSrc)) {
-  console.error('[sync-backend] Could not find backend/src at', sourceSrc);
-  process.exit(1);
+  console.warn('[sync-backend] Could not find backend/src at', sourceSrc);
+  console.warn('[sync-backend] This is OK if backend is deployed separately.');
+  console.warn('[sync-backend] Frontend will use NEXT_PUBLIC_BACKEND_URL instead.');
+  // Don't exit - this is OK when backend is deployed separately
+  process.exit(0);
 }
 
 fs.rmSync(targetDir, { recursive: true, force: true });

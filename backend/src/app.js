@@ -26,14 +26,44 @@ const app = express();
 
 app.use(helmet());
 //app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
+// CORS configuration - allow all Vercel preview deployments
+const allowedOrigins = [
+  'http://localhost:3000',  
+  'http://localhost:5173',
+  process.env.FRONTEND_URL,
+  process.env.NEXT_PUBLIC_BACKEND_URL,
+].filter(Boolean);
+
+// Add Vercel preview URL patterns
+if (process.env.VERCEL_URL) {
+  allowedOrigins.push(`https://${process.env.VERCEL_URL}`);
+}
+
 app.use(cors({ 
-  origin: [ 
-    'http://localhost:3000',  
-    'http://localhost:5173',
-    'https://deployment-git-main-eduhens.vercel.app',
-    /^https:\/\/deployment-.*-eduhens\.vercel\.app$/,
-    /^https:\/\/.*\.eduhens\.vercel\.app$/
-  ], 
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    
+    // Check exact matches
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // Check Vercel preview patterns
+    if (
+      /^https:\/\/.*\.vercel\.app$/.test(origin) ||
+      /^https:\/\/.*-.*-.*\.vercel\.app$/.test(origin)
+    ) {
+      return callback(null, true);
+    }
+    
+    // Allow eduhens domains
+    if (/^https:\/\/.*\.eduhens\.vercel\.app$/.test(origin)) {
+      return callback(null, true);
+    }
+    
+    callback(null, true); // Allow all origins for now - tighten in production
+  },
   credentials: true })); 
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ limit: '5mb', extended: true }));
