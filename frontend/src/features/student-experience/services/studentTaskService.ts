@@ -251,9 +251,14 @@ export async function enrollTask(payload: EnrollPayload): Promise<StudentTask> {
   if (!slug) throw new Error('invalid link');
 
   const token = await getToken();
+  const body = JSON.stringify({ passcode: payload.passcode?.trim() || null });
   const r = await fetch(`${BACKEND_URL}/api/enroll/${slug}`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body,
   });
   if (!r.ok) {
     const text = await r.text();

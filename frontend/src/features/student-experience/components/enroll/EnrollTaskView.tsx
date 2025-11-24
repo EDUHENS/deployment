@@ -25,10 +25,11 @@ export default function EnrollTaskView({ onEnroll, isSubmitting = false }: Enrol
     try {
       const trimmedLink = link.trim();
       const trimmedPasscode = passcode.trim();
-      if (!trimmedLink || !trimmedPasscode) {
-        setError('Please enter both the task link and the passcode.');
+      if (!trimmedLink) {
+        setError('Please enter the task link.');
         return;
       }
+
       setError(null);
       setIsProcessing(true);
       await onEnroll({ link: trimmedLink, passcode: trimmedPasscode });

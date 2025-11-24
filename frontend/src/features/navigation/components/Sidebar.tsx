@@ -162,6 +162,7 @@ export default function Sidebar({
   const handleAvatarFileChange = async (file: File) => {
     if (!file) return;
     const MAX_BYTES = 3 * 1024 * 1024;
+    // error handling for too big image: inform user if file exceeds limit
     if (file.size > MAX_BYTES) {
       setAvatarError('Please choose an image smaller than 3 MB.');
       return;
@@ -581,6 +582,11 @@ export default function Sidebar({
                   )}
                 </div>
               </div>
+              {avatarError && (
+                <p className="text-sm text-red-600 mt-1" role="alert">
+                  {avatarError}
+                </p>
+              )}
 
               <div className="flex flex-col">
                 <label className="mb-2 text-sm font-semibold text-gray-700">Full Name</label>

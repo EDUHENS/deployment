@@ -18,16 +18,33 @@ module.exports = (requireAuth) => {
     try {
       const userId = await getUserIdFromReq(req);
       const { slug } = req.params;
+       const { passcode } = req.body || {}; //check passcode from body
 
       const t = await pool.query(
-        `SELECT id, task_title, status, share_enabled, share_slug
+        `SELECT id, task_title, 
+         status, share_enabled, share_slug, access_code
          FROM tasks
          WHERE share_slug = $1 AND status = 'published' AND share_enabled = true`,
         [slug]
       );
-      if (t.rowCount === 0) return res.status(404).json({ ok: false, error: 'task not found or not shareable' });
+      if (t.rowCount === 0) 
+        {
+      return res
+        .status(404)
+        .json({ ok: false, error: 'task not found or not shareable' });
+      }
+        //return res.status(404).json({ ok: false, error: 'task not found or not shareable' });
       const task = t.rows[0];
-
+      const providedPasscode = (passcode || '').trim();
+      const storedPasscode = (task.access_code || '').trim();
+      if (storedPasscode) {
+        if (!providedPasscode) {
+          return res.status(403).json({ ok: false, error: 'invalid passcode' });
+        }
+        if (providedPasscode !== storedPasscode) {
+          return res.status(400).json({ ok: false, error: 'Incorrect passcode.' });
+        }
+      }
       // Insert enrollment idempotently
       await pool.query(
         `INSERT INTO task_enrollments (task_id, user_id, role)
