@@ -9,11 +9,16 @@ const compression = require('compression');
 const cookieParser = require('cookie-parser');
 //database 
 const { connectDB } = require('./database/index.js');
+console.log('AUTH0_DOMAIN:', process.env.AUTH0_DOMAIN ? 'set' : 'notset');
+console.log('AUTH0_AUDIENCE:', process.env.AUTH0_AUDIENCE);
+console.log('APP_BASE_URL:', process.env.APP_BASE_URL);
+console.log('DATABASE_URL:', process.env.DATABASE_URL ? 'set' : 'notset');
 // monitor error
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
   process.exit(1);
 });
+
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
@@ -30,9 +35,14 @@ app.use(helmet());
 const allowedOrigins = [
   'http://localhost:3000',  
   'http://localhost:5173',
+  'https://deployment-frontend-mzzh.onrender.com',
   process.env.FRONTEND_URL,
   process.env.NEXT_PUBLIC_BACKEND_URL,
+  process.env.APP_BASE_URL,
+  /\.onrender\.com$/,
+  /\.vercel\.app$/
 ].filter(Boolean);
+
 
 // Add Vercel preview URL patterns
 if (process.env.VERCEL_URL) {

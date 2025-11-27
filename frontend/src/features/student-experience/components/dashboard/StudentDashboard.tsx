@@ -39,20 +39,45 @@ export default function StudentDashboard({ onLogout }: StudentDashboardProps) {
 
   const [isEnrollSubmitting, setIsEnrollSubmitting] = useState(false);
 
-  const handleEnroll = async (payload: { link: string; passcode: string }) => {
-    try {
-      setIsEnrollSubmitting(true);
-      const newTask = await enroll(payload);
-      if (newTask) {
-        setSelectedTaskId(newTask.id);
-      }
-    } catch (error) {
-      console.error('Failed to enroll in task', error);
-      setToast({ message: 'Could not enroll in that task. Please check the link and passcode.', kind: 'error' });
-    } finally {
-      setIsEnrollSubmitting(false);
+const handleEnroll = async (payload: { link: string; passcode: string }) => {
+  try {
+    setIsEnrollSubmitting(true);
+    const newTask = await enroll(payload);
+    if (newTask) {
+      setSelectedTaskId(newTask.id);
     }
-  };
+  } catch (error: any) {
+    console.error('Failed to enroll in task', error);
+
+    // 從 enroll() 丟出來的錯誤裡抓資訊：
+    // 1. enroll new Error 並加上 status / backendError
+    // 2. enroll directly throw 後端 JSON { ok:false, error:'...' }
+    const status = error?.status ?? error?.response?.status;
+    const backendError =
+      error?.backendError ||
+      error?.error ||
+      error?.response?.data?.error ||
+      error?.message;
+
+    let toastMessage = 'Could not enroll in this task.';
+
+    if (backendError === 'task not found or not shareable' || status === 404) {
+      toastMessage = 'Task link is invalid or not shareable. Please check the link.';
+    } else if (backendError === 'This task requires a passcode.') {
+      toastMessage = 'This task requires a passcode. Please enter it.';
+    } else if (backendError === 'Incorrect passcode.') {
+      toastMessage = 'Incorrect passcode. Please try again.';
+    } else if (status >= 500) {
+      toastMessage = 'Server error while enrolling. Please try again later.';
+    } else {
+      toastMessage = 'Could not enroll in this task. Please check the link and passcode.';
+    }
+
+    setToast({ message: toastMessage, kind: 'error' });
+  } finally {
+    setIsEnrollSubmitting(false);
+  }
+};
 
   const handleReturnToEnroll = () => {
     setSelectedTaskId(null);
