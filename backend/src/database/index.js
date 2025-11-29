@@ -27,6 +27,11 @@ const poolConfig = process.env.DATABASE_URL
     };
 
 const pool = new Pool(poolConfig);
+pool.on('connect', (client) => {
+  client
+    .query("SET search_path TO public, auth, pg_catalog")
+    .catch((err) => console.error('[DB] Failed to set search_path:', err));
+});
 
 // test connect with retry logic and better error handling
 const connectDB = async (retries = 3) => {
@@ -68,7 +73,7 @@ const userModel = {
   async findByEmail(email) {
     try {
       const result = await pool.query(
-        'SELECT * FROM users WHERE email = $1',
+        'SELECT * FROM public.users WHERE email = $1',
         [email]
       );
       return result.rows[0];
@@ -81,7 +86,7 @@ const userModel = {
   async findById(userId) {
     try {
       const result = await pool.query(
-        'SELECT * FROM users WHERE id = $1',
+        'SELECT * FROM public.users WHERE id = $1',
         [userId]
       );
       return result.rows[0];
@@ -104,7 +109,7 @@ const userModel = {
       pushField('name', name);
       pushField('picture', picture);
       if (fields.length === 0) return await this.findById(userId);
-      const sql = `UPDATE users SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${idx} RETURNING *`;
+      const sql = `UPDATE public.users SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${idx} RETURNING *`;
       values.push(userId);
       const result = await pool.query(sql, values);
       return result.rows[0];
@@ -118,7 +123,7 @@ const userModel = {
   async findByAuth0Id(auth0Id) {
     try {
       const result = await pool.query(
-        'SELECT * FROM users WHERE auth0_id = $1',
+        'SELECT * FROM public.users WHERE auth0_id = $1',
         [auth0Id]
       );
       return result.rows[0];
@@ -133,7 +138,7 @@ const userModel = {
     const displayName = [firstName, lastName].filter(Boolean).join(' ').trim();
     try {
       const result = await pool.query(
-        `INSERT INTO users (email, password_hash, name, phone_number, auth0_provider) 
+        `INSERT INTO public.users (email, password_hash, name, phone_number, auth0_provider) 
          VALUES ($1, $2, $3, $4, 'traditional') 
          RETURNING id, email, name, email_verified, created_at`,
         [email, passwordHash, displayName || email, phoneNumber]
@@ -175,7 +180,7 @@ const userModel = {
       const existingUser = await this.findByAuth0Id(auth0Id);
       if (existingUser) {
         const result = await pool.query(
-          `UPDATE users 
+          `UPDATE public.users 
            SET 
              email = $1,
              email_verified = $2,
@@ -200,7 +205,7 @@ const userModel = {
       if (userWithSameEmail) {
         // if we have email at db, update
         const result = await pool.query(
-          `UPDATE users 
+          `UPDATE public.users 
            SET auth0_id = $1, auth0_provider = $2, email_verified = $3,
                picture = CASE WHEN picture IS NULL OR picture = '' THEN $4 ELSE picture END,
                name = CASE WHEN name IS NULL OR name = '' THEN $5 ELSE name END,
@@ -214,7 +219,7 @@ const userModel = {
 
       // create new user 
       const result = await pool.query(
-        `INSERT INTO users (
+        `INSERT INTO public.users (
           email, email_verified, name, picture, 
           auth0_id, auth0_provider, phone_number
         ) VALUES ($1, $2, $3, $4, $5, $6, '')
@@ -243,7 +248,7 @@ const userModel = {
   async verifyEmail(userId) {
     try {
       const result = await pool.query(
-        'UPDATE users SET email_verified = true WHERE id = $1 RETURNING *',
+        'UPDATE public.users SET email_verified = true WHERE id = $1 RETURNING *',
         [userId]
       );
       return result.rows[0];
@@ -273,7 +278,7 @@ const userModel = {
   async assignRole(userId, role) {
     try {
       const result = await pool.query(
-        `INSERT INTO user_roles (user_id, role) 
+        `INSERT INTO public.user_roles (user_id, role) 
          VALUES ($1, $2) 
          ON CONFLICT (user_id, role) DO NOTHING
          RETURNING *`,
@@ -289,7 +294,7 @@ const userModel = {
   async removeRole(userId, role) {
     try {
       const result = await pool.query(
-        `DELETE FROM user_roles WHERE user_id = $1 AND role = $2 RETURNING *`,
+        `DELETE FROM public.user_roles WHERE user_id = $1 AND role = $2 RETURNING *`,
         [userId, role]
       );
       return result.rows[0];
@@ -303,7 +308,7 @@ const userModel = {
     try {
       const result = await pool.query(
         `SELECT role, created_at 
-         FROM user_roles 
+         FROM public.user_roles 
          WHERE user_id = $1`,
         [userId]
       );
@@ -317,7 +322,7 @@ const userModel = {
   async hasRole(userId, role) {
     try {
       const result = await pool.query(
-        `SELECT 1 FROM user_roles 
+        `SELECT 1 FROM public.user_roles 
          WHERE user_id = $1 AND role = $2`,
         [userId, role]
       );
@@ -331,7 +336,7 @@ const userModel = {
   async hasAnyRole(userId) {
     try {
       const result = await pool.query(
-        `SELECT 1 FROM user_roles WHERE user_id = $1 LIMIT 1`,
+        `SELECT 1 FROM public.user_roles WHERE user_id = $1 LIMIT 1`,
         [userId]
       );
       return result.rows.length > 0;
@@ -346,8 +351,8 @@ const userModel = {
       const result = await pool.query(
         `SELECT u.id, u.email, u.name, u.picture, u.email_verified, u.created_at,
                 COALESCE(json_agg(ur.role) FILTER (WHERE ur.role IS NOT NULL), '[]') AS roles
-         FROM users u
-         LEFT JOIN user_roles ur ON ur.user_id = u.id
+         FROM public.users u
+         LEFT JOIN public.user_roles ur ON ur.user_id = u.id
          GROUP BY u.id
          ORDER BY u.created_at DESC
          LIMIT $1 OFFSET $2`,
@@ -383,7 +388,7 @@ const userModel = {
   async removeRole(userId, role) {
     try {
       const result = await pool.query(
-        `DELETE FROM user_roles 
+        `DELETE FROM public.user_roles 
          WHERE user_id = $1 AND role = $2
          RETURNING *`,
         [userId, role]
@@ -400,7 +405,7 @@ const userModel = {
     try {
       // ON DELETE CASCADE，delete user_roles
       const result = await pool.query(
-        `DELETE FROM users WHERE id = $1 RETURNING *`,
+        `DELETE FROM public.users WHERE id = $1 RETURNING *`,
         [userId]
       );
       return result.rows[0];

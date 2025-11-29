@@ -8,9 +8,13 @@ module.exports = (requireAuth) => {
   async function getUserIdFromReq(req) {
     const sub = req?.auth?.payload?.sub;
     if (!sub) throw new Error('no auth sub');
-    const u = await userModel.findByAuth0Id(sub);
-    if (!u) throw new Error('user not found');
-    return u.id;
+    let user = await userModel.findByAuth0Id(sub);
+    if (!user) {
+      await userModel.createOrUpdateAuth0User(req.auth.payload);
+      user = await userModel.findByAuth0Id(sub);
+    }
+    if (!user) throw new Error('user not found');
+    return user.id;
   }
 
   // Enroll current user to a task via share slug
@@ -77,7 +81,7 @@ module.exports = (requireAuth) => {
             u.picture AS teacher_picture
          FROM task_enrollments e
          JOIN tasks t ON t.id = e.task_id
-         LEFT JOIN users u ON u.id = t.teacher_id
+        LEFT JOIN public.users u ON u.id = t.teacher_id
         WHERE e.user_id = $1
         ORDER BY t.updated_at DESC`,
         [userId]

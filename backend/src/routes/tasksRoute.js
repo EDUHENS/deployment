@@ -464,7 +464,7 @@ module.exports = (requireAuth) => {
       const r = await pool.query(
         `SELECT e.user_id, u.name, u.email, u.picture, e.enrolled_at
            FROM task_enrollments e
-           JOIN users u ON u.id = e.user_id
+          JOIN public.users u ON u.id = e.user_id
           WHERE e.task_id = $1
           ORDER BY e.enrolled_at DESC`,
         [id]
@@ -489,7 +489,7 @@ module.exports = (requireAuth) => {
                 s.educator_score, s.educator_feedback, s.notes, s.clarity_score,
                 u.name, u.email, u.picture
            FROM submissions s
-           JOIN users u ON u.id = s.student_id
+           JOIN public.users u ON u.id = s.student_id
           WHERE s.task_id = $1
           ORDER BY COALESCE(s.submitted_at, s.created_at) DESC`,
         [id]

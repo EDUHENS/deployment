@@ -1,14 +1,19 @@
-// This catch-all route handles all Auth0 authentication routes:
-// - /api/auth/login
-// - /api/auth/callback
-// - /api/auth/logout
-// - /api/auth/me
-// - /api/auth/access-token
-//old code, fix problem
+// This catch-all route handles Auth0 SDK endpoints (login/callback/logout/me/access-token).
+import { NextRequest } from 'next/server';
 import { auth0 } from '@/lib/auth0';
-//import { handleAuth } from "@auth0/nextjs-auth0";
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
-export const GET = auth0.handleAuth;
+async function handler(req: NextRequest) {
+  return auth0.middleware(req);
+}
+
+export async function GET(req: NextRequest) {
+  return handler(req);
+}
+
+export async function POST(req: NextRequest) {
+  return handler(req);
+}
 //export default handleAuth();
-

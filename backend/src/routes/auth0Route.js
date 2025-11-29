@@ -190,6 +190,12 @@ module.exports = (requireAuth) => {
   // Get current user profile (with role information)
   router.get('/me', requireAuth, syncAuth0User, async (req, res) => {
     try {
+      console.log('🔐 [AUTH /me] get request');
+      console.log('🔐 [AUTH /me] Headers:', {
+      authorization: req.headers.authorization ? '有 token' : '無 token',
+      origin: req.headers.origin,
+      host: req.headers.host
+    });
       const rawAuth = req.headers?.authorization || '';
       console.log('[API /me] Authorization header present:', rawAuth ? 'yes' : 'no');
       if (rawAuth) {
@@ -468,8 +474,8 @@ module.exports = (requireAuth) => {
             json_agg(DISTINCT ur.role) FILTER (WHERE ur.role IS NOT NULL), 
             '[]'
           ) as roles
-        FROM users u
-        LEFT JOIN user_roles ur ON u.id = ur.user_id
+        FROM public.users u
+        LEFT JOIN public.user_roles ur ON u.id = ur.user_id
         GROUP BY u.id
         ORDER BY u.created_at DESC
       `);

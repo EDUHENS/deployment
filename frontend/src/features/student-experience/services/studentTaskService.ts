@@ -1,5 +1,6 @@
 import type { EnrollPayload, StudentTask, SubmissionPayload } from '../types/studentTask';
 import { parseResourceLink } from '@/shared/utils/resourceLinks';
+import type { ParsedResourceLink } from '@/shared/utils/resourceLinks';
 import { getBackendUrl } from '@/lib/backendUrl';
 
 const BACKEND_URL = getBackendUrl();
@@ -152,12 +153,22 @@ export async function fetchEnrolledTasks(): Promise<StudentTask[]> {
         if (a.level_of_task) base.level = String(a.level_of_task).trim();
         // Resources: preserve exact format from database (strings like "Title - URL")
         if (Array.isArray(a.resources)) {
-          base.resources = a.resources.map((r: any) => String(r || '').trim()).filter(Boolean);
+          type LinkResource = ParsedResourceLink & { href: string };
+          const resourceStrings: string[] = a.resources
+            .map((value: unknown) => String(value ?? '').trim())
+            .filter((value: string) => Boolean(value));
+          base.resources = resourceStrings;
           // Also parse resources into structured format for display
-          base.resourceLinks = base.resources
-            .map((r) => parseResourceLink(r))
-            .filter((r): r is { title: string; url: string } => r !== null && r.href !== undefined)
-            .map((r) => ({ title: r.title || r.href || '', url: r.href || '' }));
+          const parsedResources: LinkResource[] = resourceStrings
+            .map((resourceString: string) => parseResourceLink(resourceString))
+            .filter(
+              (resource: ParsedResourceLink | null): resource is LinkResource =>
+                Boolean(resource?.href)
+            );
+          base.resourceLinks = parsedResources.map((resource: LinkResource) => ({
+            title: resource.title || resource.href,
+            url: resource.href,
+          }));
         }
         // Reflection questions
         if (Array.isArray(a.reflection_questions)) {
@@ -217,7 +228,13 @@ export async function fetchEnrolledTasks(): Promise<StudentTask[]> {
         const aiScoreStatus = typeof mine.ai_score === 'number'
           ? (mine.ai_score >= 60 ? 'passed' : 'failed')
           : undefined;
-        const finalStatus = (educatorStatus || aiScoreStatus || aiParsed.overall || 'pending') as 'pass' | 'fail' | 'pending';
+        const aiOverallStatus =
+          aiParsed.overall === 'pass'
+            ? 'passed'
+            : aiParsed.overall === 'fail'
+              ? 'failed'
+              : undefined;
+        const finalStatus = (educatorStatus || aiScoreStatus || aiOverallStatus || 'pending') as 'passed' | 'failed' | 'pending';
 
         base.summary = {
           clarityScore: typeof mine.clarity_score === 'number'
