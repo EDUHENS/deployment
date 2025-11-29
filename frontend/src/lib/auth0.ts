@@ -12,6 +12,23 @@ console.log("AUTH0 Config Debug:", {
 // Configuration object - handle missing env vars gracefully during build
 const auth0Config: any = {};
 
+// Ensure Auth0 always receives a valid secret for HKDF encryption/decryption
+const sessionSecret =
+  process.env.AUTH0_SECRET ||
+  process.env.AUTH0_CLIENT_SECRET ||
+  process.env.AUTH0_SESSION_SECRET;
+
+if (sessionSecret) {
+  auth0Config.secret = sessionSecret;
+} else if (process.env.NODE_ENV === "development") {
+  auth0Config.secret = "local-development-session-secret-123456789012345678901234567890";
+  console.warn(
+    "AUTH0_SECRET is missing. Using a fallback secret for local development. Set AUTH0_SECRET to a secure value."
+  );
+} else {
+  throw new Error("AUTH0_SECRET is required in production to decrypt sessions.");
+}
+
 // Only add authorizationParameters if audience is defined
 if (process.env.AUTH0_AUDIENCE) {
   auth0Config.authorizationParameters = {
