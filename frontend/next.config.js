@@ -32,7 +32,8 @@ const nextConfig = {
   // Disable source maps in production to reduce build time and bundle size
   productionBrowserSourceMaps: false,
   // Optimize output for serverless
-  output: 'standalone',
+  //commented for railway deployment
+  //output: 'standalone',
 }
 
 module.exports = nextConfig

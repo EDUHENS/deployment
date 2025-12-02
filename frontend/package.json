@@ -2,13 +2,17 @@
   "name": "eduhens1",
   "version": "0.1.0",
   "private": true,
+  "//": [
+    "========================================",
+    "add -p $PORT  at scripts    ",
+    "========================================"
+  ],
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
     "prebuild": "npm run sync-backend",
     "sync-backend": "node scripts/sync-backend.js",
-    "start": "next start",
-    "lint": "next lint",
+    "start": "next start -p $PORT", 
     "lint:fix": "next lint --fix"
   },
   "dependencies": {
