@@ -38,9 +38,11 @@ function HomeContent() {
   useEffect(() => {
     if (!isLoading && !user && !showSplash) {
       // Redirect directly to Auth0 login
+      console.log('[Home] Redirecting to Auth0 login with returnTo:', normalizedReturnTo);
       const returnTo = encodeURIComponent(normalizedReturnTo);
       window.location.href = `/api/auth/login?returnTo=${returnTo}`;
     }
+    console.log('[Home] Not authenticated and splash done, redirecting to Auth0 login.');
   }, [isLoading, user, showSplash, normalizedReturnTo]);
 
   // Always show loader (either waiting for auth state or about to redirect)

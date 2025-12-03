@@ -40,6 +40,7 @@ if (process.env.AUTH0_AUDIENCE) {
 // Add callback handler
 auth0Config.onCallback = async (error: any, ctx: any) => {
   const baseUrl = process.env.APP_BASE_URL || process.env.AUTH0_BASE_URL || "http://localhost:3000";
+  console.log('[lib/auth0] onCallback:', baseUrl);
   // Reason: Default post-login destination is Dashboard Selection when no returnTo is provided.
   const safeReturnTo = ctx?.returnTo || "/dashboard-selection";
 
