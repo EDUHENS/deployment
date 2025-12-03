@@ -8,6 +8,14 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const redirectUrl = new URL('/api/auth/me', url.origin);
   
+  console.log('=== DEBUG ===');
+  console.log('Request URL:', request.url);
+  console.log('url.origin:', url.origin);
+  console.log('url.host:', url.host);
+  console.log('redirectUrl.origin:', redirectUrl.origin);
+  console.log('redirectUrl.host:', redirectUrl.host);
+  console.log('NEXT_PUBLIC_BACKEND_URL:', process.env.NEXT_PUBLIC_BACKEND_URL);
+
   // Preserve all query parameters
   url.searchParams.forEach((value, key) => {
     redirectUrl.searchParams.set(key, value);
