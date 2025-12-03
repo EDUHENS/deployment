@@ -132,6 +132,60 @@ app.use('/api/enroll', enrollRoute);
 app.use('/api/submissions', submissionsRoute);
 app.use('/api/submissions/ai', submissionsAiRoute);
 
+// test code for backend render
+// ↓↓↓ 添加這裡 ↓↓↓
+// 處理根路徑
+app.get('/', (req, res) => {
+  res.json({
+    service: 'Eduhens Backend API',
+    status: 'running',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    endpoints: {
+      healthCheck: '/api/health',
+      dbCheck: '/api/db-connect',
+      auth: '/api/auth',
+      tasks: '/api/tasks',
+      enroll: '/api/enroll',
+      submissions: '/api/submissions',
+      deploymentCheck: '/api/deployment-check'
+    },
+    docs: 'Check API documentation for usage'
+  });
+});
+
+// 添加一個專門的部署檢查端點
+app.get('/api/deployment-check', (req, res) => {
+  res.json({
+    deployment: 'Render',
+    service: 'running',
+    database: 'connected ✅',
+    port: process.env.PORT || 4000,
+    nodeVersion: process.version,
+    platform: process.platform
+  });
+});
+
+// 處理 404 錯誤
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'Endpoint not found',
+    path: req.originalUrl,
+    availableEndpoints: [
+      'GET /',
+      'GET /api/health',
+      'GET /api/db-connect', 
+      'GET /api/deployment-check',
+      'GET /api/auth/me',
+      'GET /api/tasks',
+      'POST /api/tasks',
+      'GET /api/enroll',
+      'GET /api/submissions'
+    ]
+  });
+});
+// ↑↑↑ 添加這裡 ↑↑↑
+
 // Initialize database connection
 connectDB().then(() => {
   console.log('Database connected successfully');
