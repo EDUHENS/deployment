@@ -1,10 +1,14 @@
 // Returns an API access token for the logged-in user so the
 // frontend can call the backend with Authorization: Bearer <token>.
 // Maps SDK shape { token, expiresAt, ... } -> { accessToken, expiresAt, ... } expected by authApi.ts
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth0 } from '@/lib/auth0';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+    console.log('==============================');
+  console.log('[api/auth/access-token] Incoming request');
+  console.log('[api/auth/access-token] Referer:', req.headers.get('referer'));
+  console.log('[api/auth/access-token] Cookies:', req.cookies.getAll().map(c => c.name));
   try {
     const tokenSet = await auth0.getAccessToken();
     if (!tokenSet?.token) {
