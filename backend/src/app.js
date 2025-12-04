@@ -87,6 +87,29 @@ app.use(express.json({ limit: '5mb' }));
 // 新增
 app.use(express.urlencoded({ limit: '5mb', extended: true }));
 
+app.use((req, res, next) => {
+  // 只針對 /api 開頭的路由做紀錄（避免把所有靜態檔也印出來）
+  if (req.path.startsWith('/api')) {
+    const authHeader = req.headers['authorization'] || '';
+
+    if (authHeader) {
+      console.log('[backend][auth-debug] Incoming request WITH Authorization', {
+        method: req.method,
+        path: req.path,
+        // 只印出前 25 個字 + 字串長度，確認 token 有帶到就好
+        authHeaderPreview: `${authHeader.slice(0, 25)}... (len=${authHeader.length})`,
+      });
+    } else {
+      console.log('[backend][auth-debug] Incoming request WITHOUT Authorization', {
+        method: req.method,
+        path: req.path,
+      });
+    }
+  }
+
+  next();
+});
+
 /*
 app.use(cookieParser());
 app.use(compression());
