@@ -18,7 +18,18 @@ export async function GET(req: NextRequest) {
   // 🔴 新增：把 request 的重要資訊打到 Render logs
   const authHeader = req.headers.get('authorization');
   const cookies = req.cookies.getAll();
+  console.log('============================');
+  console.log('[api/auth/me] Incoming request');
 
+  // 請求來源網址（重要：可以看是哪個頁面觸發）
+  console.log('[api/auth/me] Referer:', req.headers.get('referer'));
+
+  // 實際 server 看到的 URL
+  console.log('[api/auth/me] Request URL:', url.toString());
+  console.log('[api/auth/me] Host:', url.host);
+  console.log('[api/auth/me] Origin:', url.origin);
+  console.log('[api/auth/me] Origin:', );
+  
   console.log('[api/auth/me] Incoming request', {
     url: url.toString(),
     pathname: url.pathname,
