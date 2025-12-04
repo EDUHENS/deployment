@@ -44,10 +44,17 @@ async function authFetch(input: string, init?: RequestInit) {
   console.log('[authApi] Backend response:', res.status, res.statusText);
   return res;
 }
-
+//getme to getprofile
+/*
 export async function getMe() {
   console.log('[authApi] getMe ->', `${BACKEND_URL}/api/auth/me`);
   const res = await authFetch(`${BACKEND_URL}/api/auth/me`);
+  return res.json();
+}
+*/
+export async function getProfile() {
+  console.log('[authApi] getProfile ->', `${BACKEND_URL}/api/auth/profile`);
+  const res = await authFetch(`${BACKEND_URL}/api/auth/profile`);
   return res.json();
 }
 

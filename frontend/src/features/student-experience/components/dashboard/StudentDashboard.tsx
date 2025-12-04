@@ -9,7 +9,8 @@ import SubmissionSavedModal from '../Modals/SubmissionSavedModal';
 import { useStudentTasks } from '../../hooks/useStudentTasks';
 import type { StudentTask } from '../../types/studentTask';
 import type { Task as SidebarTask } from '@/features/educator-experience/types';
-import { getMe } from '@/services/authApi';
+//import { getMe } from '@/services/authApi';
+import { getProfile } from '@/services/authApi';
 import SimpleToast from '@/shared/components/ui/SimpleToast';
 
 interface StudentDashboardProps {
@@ -101,7 +102,7 @@ export default function StudentDashboard({ onLogout }: StudentDashboardProps) {
   useEffect(() => {
     (async () => {
       try {
-        const me = await getMe();
+        const me = await getProfile();
         if (!me?.ok) return;
         const u = me.user || {};
         const name = getDisplayName(u);
@@ -118,7 +119,7 @@ export default function StudentDashboard({ onLogout }: StudentDashboardProps) {
 
   const refreshProfile = async () => {
     try {
-      const me = await getMe();
+      const me = await getProfile();
       if (!me?.ok) return;
       const u = me.user || {};
       const name = getDisplayName(u);

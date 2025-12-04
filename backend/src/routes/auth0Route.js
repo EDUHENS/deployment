@@ -189,10 +189,12 @@ module.exports = (requireAuth) => {
   // ========== ROUTES ==========
 
   // Get current user profile (with role information)
-  router.get('/me', requireAuth, syncAuth0User, async (req, res) => {
+  //change me to profit
+  //router.get('/me', requireAuth, syncAuth0User, async (req, res) => {
+  router.get('/profile', requireAuth, syncAuth0User, async (req, res) => {
     try {
       const rawAuth = req.headers?.authorization || '';
-      console.log('[API /me] Authorization header present:', rawAuth ? 'yes' : 'no');
+      console.log('[API /profile] Authorization header present:', rawAuth ? 'yes' : 'no');
       if (rawAuth) {
         console.log('[API /me] Authorization (first 16 chars):', rawAuth.substring(0, 16) + '...');
       }
@@ -231,7 +233,8 @@ module.exports = (requireAuth) => {
   });
 
   // Update current user's profile (name, picture)
-  router.patch('/me', requireAuth, async (req, res) => {
+  //change me to profile
+  router.patch('/profile', requireAuth, async (req, res) => {
     try {
       const claims = req.auth.payload;
       const user = await userModel.findByAuth0Id(claims.sub);
@@ -275,27 +278,27 @@ module.exports = (requireAuth) => {
   });
 
   // Allow authenticated users to self-assign specific roles (educator/student dashboard access)
-  router.post('/me/roles', requireAuth, syncAuth0User, async (req, res) => {
+  router.post('/profile/roles', requireAuth, syncAuth0User, async (req, res) => {
     try {
       const { role } = req.body || {};
-      console.log('[POST /me/roles] Requested role:', role);
+      console.log('[POST /profile/roles] Requested role:', role);
       const allowed = ['student', 'teacher'];
       if (!allowed.includes(role)) {
-        console.error('[POST /me/roles] Invalid role requested:', role);
+        console.error('[POST /profile/roles] Invalid role requested:', role);
         return res.status(400).json({ ok: false, error: 'Invalid role' });
       }
       const claims = req.auth.payload;
-      console.log('[POST /me/roles] Auth0 sub:', claims.sub);
+      console.log('[POST /profile/roles] Auth0 sub:', claims.sub);
       const user = await userModel.findByAuth0Id(claims.sub);
       if (!user) {
-        console.error('[POST /me/roles] User not found in database for sub:', claims.sub);
+        console.error('[POST /profile/roles] User not found in database for sub:', claims.sub);
         return res.status(404).json({ ok: false, error: 'User not found' });
       }
-      console.log('[POST /me/roles] User found:', user.id, user.email);
+      console.log('[POST /profile/roles] User found:', user.id, user.email);
       const assignment = await userModel.assignRole(user.id, role);
-      console.log('[POST /me/roles] Role assignment result:', assignment);
+      console.log('[POST /profile/roles] Role assignment result:', assignment);
       const roles = await userModel.getUserRoles(user.id);
-      console.log('[POST /me/roles] User roles after assignment:', roles.map((r) => r.role));
+      console.log('[POST /profile/roles] User roles after assignment:', roles.map((r) => r.role));
       res.json({
         ok: true,
         role,
@@ -303,7 +306,7 @@ module.exports = (requireAuth) => {
         roles: roles.map((r) => r.role),
       });
     } catch (error) {
-      console.error('[POST /me/roles] Error assigning self-role:', error);
+      console.error('[POST /profile/roles] Error assigning self-role:', error);
       res.status(500).json({ ok: false, error: 'Failed to assign role' });
     }
   });
