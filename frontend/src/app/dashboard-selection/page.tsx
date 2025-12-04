@@ -27,13 +27,14 @@ export default function DashboardSelectionPage() {
     })();
   }, [isLoading, user]);
 
-  // 新增
+  // 新增 
+  /*
   useEffect(() => {
     if (isLoading) return;
     if (!user) {
       router.replace('/?returnTo=/dashboard-selection');
     }
-  }, [isLoading, user, router]);
+  }, [isLoading, user, router]);*/
 
   //back to login if not log in
   if (isLoading) return null;
