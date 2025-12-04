@@ -6,6 +6,10 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function GET(request: NextRequest) {
   // Redirect to the correct backend API route
   const url = new URL(request.url);
+  //const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || url.origin;
+
+  //const redirectUrl = new URL('/api/auth/me', backendUrl);
+  // 新增
   const redirectUrl = new URL('/api/auth/me', url.origin);
   
   console.log('=== DEBUG ===');
@@ -25,4 +29,3 @@ export async function GET(request: NextRequest) {
   
   return NextResponse.redirect(redirectUrl);
 }
-

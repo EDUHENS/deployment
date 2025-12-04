@@ -27,11 +27,21 @@ export default function DashboardSelectionPage() {
     })();
   }, [isLoading, user]);
 
+  // 新增
+  useEffect(() => {
+    if (isLoading) return;
+    if (!user) {
+      router.replace('/?returnTo=/dashboard-selection');
+    }
+  }, [isLoading, user, router]);
+
   //back to login if not log in
   if (isLoading) return null;
   // Reason: Avoid hitting SDK route "/api/auth/login" which triggers Auth0 Hosted Login directly.
   // Redirect to our app's local login page instead, preserving intended destination.
-  if (!user) { router.push('/?returnTo=/dashboard-selection'); return null; }
+  //if (!user) { router.push('/?returnTo=/dashboard-selection'); return null; }
+  // 新增
+  if (!user) return null;
 
   const handleSelect = async (type: 'educator' | 'student') => {
     if (isAssigningRole) return; // prevent double-clicks

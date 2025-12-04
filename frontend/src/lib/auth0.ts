@@ -34,6 +34,8 @@ if (process.env.AUTH0_AUDIENCE) {
   auth0Config.authorizationParameters = {
     audience: process.env.AUTH0_AUDIENCE,
     scope: process.env.AUTH0_SCOPE || "openid profile email offline_access",
+    // 新增
+    prompt: process.env.AUTH0_PROMPT || "login",
   };
 }
 

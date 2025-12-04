@@ -7,8 +7,11 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function GET(request: NextRequest) {
   // Get the full URL with all query parameters
   const url = new URL(request.url);
-  
+  //const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || url.origin;
+  //const redirectUrl = new URL('/api/auth/me', backendUrl);
   // Redirect to the correct Auth0 SDK callback route
+  //const redirectUrl = new URL('/api/auth/callback', url.origin);
+  // 新增
   const redirectUrl = new URL('/api/auth/callback', url.origin);
   
   console.log('=== DEBUG ===');
@@ -29,4 +32,3 @@ export async function GET(request: NextRequest) {
   // Redirect to the Auth0 SDK handler
   return NextResponse.redirect(redirectUrl);
 }
-
