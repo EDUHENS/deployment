@@ -12,7 +12,9 @@ export async function GET(request: NextRequest) {
   // Redirect to the correct Auth0 SDK callback route
   //const redirectUrl = new URL('/api/auth/callback', url.origin);
   // 新增
-  const redirectUrl = new URL('/api/auth/callback', url.origin);
+  const baseUrl = process.env.APP_BASE_URL || process.env.AUTH0_BASE_URL || url.origin;
+  // 新增
+  const redirectUrl = new URL('/api/auth/callback', baseUrl);
   
   console.log('=== DEBUG ===');
   console.log('Request URL:', request.url);
