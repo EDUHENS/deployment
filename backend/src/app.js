@@ -7,6 +7,18 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const cookieParser = require('cookie-parser');
+// 新增
+const auth0RouteFactory = require('./routes/auth0Route');
+// 新增
+const tasksRouteFactory = require('./routes/tasksRoute');
+// 新增
+const tasksAiRouteFactory = require('./routes/tasksAiRoute');
+// 新增
+const enrollRouteFactory = require('./routes/enrollRoute');
+// 新增
+const submissionsRouteFactory = require('./routes/submissionsRoute');
+// 新增
+const submissionsAiRouteFactory = require('./routes/submissionsAiRoute');
 //database 
 const { connectDB } = require('./database/index.js');
 // monitor error
@@ -29,7 +41,7 @@ app.use(helmet());
 // CORS configuration - allow all Vercel preview deployments
 const allowedOrigins = [
   'http://localhost:3000',  
-  'http://localhost:5173',
+  'http://localhost:5001',
   process.env.FRONTEND_URL,
   process.env.NEXT_PUBLIC_BACKEND_URL,
 ].filter(Boolean);
@@ -38,7 +50,7 @@ const allowedOrigins = [
 if (process.env.VERCEL_URL) {
   allowedOrigins.push(`https://${process.env.VERCEL_URL}`);
 }
-
+/*
 app.use(cors({ 
   origin: function (origin, callback) {
     // Allow requests with no origin (mobile apps, curl, etc.)
@@ -65,45 +77,133 @@ app.use(cors({
     callback(null, true); // Allow all origins for now - tighten in production
   },
   credentials: true })); 
+*/
+app.use(cors());
+
+//app.use(express.json({ limit: '5mb' }));
+//app.use(express.urlencoded({ limit: '5mb', extended: true }));
+// 新增
 app.use(express.json({ limit: '5mb' }));
+// 新增
 app.use(express.urlencoded({ limit: '5mb', extended: true }));
+
+/*
 app.use(cookieParser());
 app.use(compression());
 app.use(morgan('dev'));
 app.use(rateLimit({ windowMs: 60 * 1000, max: 100 }));
+*/
+//auth0
+//let requireAuth = (_req, _res, next) => next()
+//let requireAuth = (_req, _res, next) => {
+//  console.log('[Auth0] requireAuth is NO-OP middleware');
+//  next(); 
+//}
+
+//if (process.env.AUTH0_AUDIENCE && process.env.AUTH0_DOMAIN) {
+//  console.log('[Auth0] Enabling JWT validation middleware');
+//  console.log('[Auth0] issuerBaseURL = https://%s/', (process.env.AUTH0_DOMAIN || '').trim());
+//  console.log('[Auth0] audience     = %s', (process.env.AUTH0_AUDIENCE || '').trim());
+//
+//  //const domain = process.env.AUTH0_DOMAIN.trim();
+//  //const audience = process.env.AUTH0_AUDIENCE.trim();
+//  
+//  const domain = "eduhens.eu.auth0.com";
+//  const audience = "https://api.eduhens.local";
+///*
+//  requireAuth = auth({
+//    audience: audience,
+//    issuerBaseURL: `https://${domain}/`,
+//    tokenSigningAlg: 'RS256',
+//    validateAccessToken: true,
+//
+//    handleError: (error, req, res, next) => {
+//    console.error('🔴 Auth Error Details:', {
+//      name: error.name,
+//      code: error.code,
+//      message: error.message,
+//      status: error.status,
+//      stack: error.stack
+//    });
+//
+//    res.status(500).json({ error: 'Authentication failed', details: error.message });  }
+//  })
+//    */
+//} else {
+//  console.warn('[Auth0] AUTH0_AUDIENCE or AUTH0_DOMAIN not set. requireAuth is NO-OP.');
+//}
 
 //auth0
-let requireAuth = (_req, _res, next) => next()
-
-if (process.env.AUTH0_AUDIENCE && process.env.AUTH0_DOMAIN) {
-  console.log('[Auth0] Enabling JWT validation middleware');
-  console.log('[Auth0] issuerBaseURL = https://%s/', (process.env.AUTH0_DOMAIN || '').trim());
-  console.log('[Auth0] audience     = %s', (process.env.AUTH0_AUDIENCE || '').trim());
-  requireAuth = auth({
-    audience: process.env.AUTH0_AUDIENCE,
-    issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}/`,
-    tokenSigningAlg: 'RS256',
-  })
-} else {
-  console.warn('[Auth0] AUTH0_AUDIENCE or AUTH0_DOMAIN not set. requireAuth is NO-OP.');
-}
-
-//auth0
-/*
-const requireAuth = auth({
-  audience: process.env.AUTH0_AUDIENCE,
-  issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}/`,
+//  const domain = "eduhens.eu.auth0.com";
+//  const audience = "https://api.eduhens.local";
+//
+//app.use(auth({
+//  audience: audience,
+//  issuerBaseURL: `https://${domain}/`,
+//}));
+// 新增
+const defaultAuth0Domain = (process.env.AUTH0_DOMAIN || 'eduhens.eu.auth0.com').trim();
+// 新增
+const defaultAuth0Audience = process.env.AUTH0_AUDIENCE || 'https://api.eduhens.local';
+// 新增
+const verifyJwtToken = auth({
+  audience: defaultAuth0Audience,
+  issuerBaseURL: `https://${defaultAuth0Domain}/`,
   tokenSigningAlg: 'RS256',
+  validateAccessToken: true,
+  handleError: (error, req, res, next) => {
+    console.error('[Auth0] Validation error:', error);
+    if (res.headersSent) {
+      return next(error);
+    }
+    res.status(error.status || 401).json({
+      ok: false,
+      error: 'Authentication failed',
+      details: error.message,
+    });
+  },
 });
-*/ 
-const auth0Route = require('./routes/auth0Route')(requireAuth);
-const tasksRoute = require('./routes/tasksRoute')(requireAuth);
-const tasksAiRoute = require('./routes/tasksAiRoute')(requireAuth);
-const enrollRoute = require('./routes/enrollRoute')(requireAuth);
-const submissionsRoute = require('./routes/submissionsRoute')(requireAuth);
-const submissionsAiRoute = require('./routes/submissionsAiRoute')(requireAuth);
+// 新增
+const requireAuth = (req, res, next) => {
+  const authHeader = req.headers.authorization || '';
+  if (!/^bearer\s+/i.test(authHeader)) {
+    return res.status(401).json({
+      ok: false,
+      error: 'Missing Authorization header',
+      details: 'Send Bearer token from Auth0 to access this endpoint.',
+    });
+  }
+  return verifyJwtToken(req, res, next);
+};
+// 新增
+if (!process.env.AUTH0_AUDIENCE || !process.env.AUTH0_DOMAIN) {
+  console.warn('[Auth0] AUTH0_AUDIENCE or AUTH0_DOMAIN not set. Falling back to defaults.');
+}
+// 新增
+const auth0Route = auth0RouteFactory(requireAuth);
+// 新增
+const tasksRoute = tasksRouteFactory(requireAuth);
+// 新增
+const tasksAiRoute = tasksAiRouteFactory(requireAuth);
+// 新增
+const enrollRoute = enrollRouteFactory(requireAuth);
+// 新增
+const submissionsRoute = submissionsRouteFactory(requireAuth);
+// 新增
+const submissionsAiRoute = submissionsAiRouteFactory(requireAuth);
+ 
+//const auth0Route = require('./routes/auth0Route')(requireAuth);
+//const tasksRoute = require('./routes/tasksRoute')(requireAuth);
+//const tasksAiRoute = require('./routes/tasksAiRoute')(requireAuth);
+//const enrollRoute = require('./routes/enrollRoute')(requireAuth);
+//const submissionsRoute = require('./routes/submissionsRoute')(requireAuth);
+//const submissionsAiRoute = require('./routes/submissionsAiRoute')(requireAuth);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
+
+app.get('/api/health2', requireAuth, (req, res) => res.json({ ok: true }));
+
+
 
 //old code
 /*
@@ -125,11 +225,23 @@ app.get('/api/db-connect', async (_req, res) => {
   }
 });
 //get me from routes
+//app.use('/api/auth', auth0Route);
+//app.use('/api/tasks', tasksRoute);
+//app.use('/api/tasks/ai', tasksAiRoute);
+//app.use('/api/enroll', enrollRoute);
+//app.use('/api/submissions', submissionsRoute);
+//app.use('/api/submissions/ai', submissionsAiRoute);
+// 新增
 app.use('/api/auth', auth0Route);
+// 新增
 app.use('/api/tasks', tasksRoute);
+// 新增
 app.use('/api/tasks/ai', tasksAiRoute);
+// 新增
 app.use('/api/enroll', enrollRoute);
+// 新增
 app.use('/api/submissions', submissionsRoute);
+// 新增
 app.use('/api/submissions/ai', submissionsAiRoute);
 
 // test code for backend render

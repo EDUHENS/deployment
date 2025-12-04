@@ -6,6 +6,7 @@ const { userModel, pool } = require('../database/index.js');
 module.exports = (requireAuth) => {
   // Sync Auth0 user middleware
   const syncAuth0User = async (req, res, next) => {
+    console.error('Auth0 claims received:', req.auth && req.auth.payload ? req.auth.payload.sub : 'no auth');
     if (req.auth && req.auth.payload) {
       try {
         const claims = req.auth.payload;
@@ -308,11 +309,19 @@ module.exports = (requireAuth) => {
   });
 
   // Secure endpoint example
-  router.get('/secure', requireAuth, syncAuth0User, (req, res) => {
+  router.get('/secure', requireAuth, (req, res) => {
+    console.error('[API /secure] Authenticated request received');
+/*
     res.json({ 
       ok: true, 
       sub: req.auth.payload.sub,
       message: 'User authenticated and synced to database'
+    });
+    */
+    res.json({ 
+      ok: true, 
+      message: 'Works with no-op auth',
+      timestamp: new Date().toISOString()
     });
   });
 
